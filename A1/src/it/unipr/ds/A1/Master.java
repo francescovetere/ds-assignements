@@ -1,7 +1,5 @@
 package it.unipr.ds.A1;
 
-import java.io.FileReader;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.io.IOException;
@@ -41,7 +39,7 @@ public class Master {
 		this.mainSocket = new ServerSocket(MASTER_PORT);
 	}
 
-	private void run() throws IOException {
+	private void run() {
 		System.out.println("Master running (" + MASTER_ADDR + ":" + MASTER_PORT + ")");
 		
 		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
@@ -62,8 +60,7 @@ public class Master {
 			}
 		}
 
-		this.pool.shutdown();
-				
+		this.pool.shutdown();			
 	}
 
 	public ThreadPoolExecutor getPool() {
@@ -89,7 +86,7 @@ public class Master {
 	 * 
 	 * @param properties String that identifies the properties file
 	 * @param address String that identifies the address (key)
-	 * @param port int that identifies the port (value)
+	 * @param port Int that identifies the port (value)
 	 * 
 	 * @throws IOException
 	 */
