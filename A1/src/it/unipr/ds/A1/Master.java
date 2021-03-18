@@ -1,10 +1,15 @@
 package it.unipr.ds.A1;
 
+import java.io.FileReader;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -20,6 +25,8 @@ public class Master {
 	private static final int MAXPOOL = 100;
 	private static final long IDLETIME = 5000;
 	
+	private static final String PROPERTIES = "config.properties";
+	
 	private static String MASTER_ADDR;
 	private static int MASTER_PORT;
 	
@@ -34,7 +41,7 @@ public class Master {
 		this.mainSocket = new ServerSocket(MASTER_PORT);
 	}
 
-	private void run() {
+	private void run() throws IOException {
 		System.out.println("Master running (" + MASTER_ADDR + ":" + MASTER_PORT + ")");
 		
 		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
@@ -56,6 +63,7 @@ public class Master {
 		}
 
 		this.pool.shutdown();
+				
 	}
 
 	public ThreadPoolExecutor getPool() {
@@ -75,6 +83,33 @@ public class Master {
 		}
 	}
 
+	/**
+	 * Method that write on the properties file an (address, port) pair
+	 * Used to initialize the config file after Master node starting
+	 * 
+	 * @param properties String that identifies the properties file
+	 * @param address String that identifies the address (key)
+	 * @param port int that identifies the port (value)
+	 * 
+	 * @throws IOException
+	 */
+	public static void writeConfig(final String properties, final String address, final int port) throws IOException {
+		//Create an OutputStream to write on file
+        try (OutputStream output = new FileOutputStream(properties)) { 
+
+        	Properties p = new Properties();
+        	
+            p.setProperty("master", address + "," + port);
+            
+            p.store(output, null);
+
+        }
+        catch (IOException io) {
+            io.printStackTrace();        	
+        }
+
+	}
+	
 	public static void main(final String[] args) throws IOException {
 		if (args.length != 2) {
 			System.out.println("Usage: java Master <MASTER_ADDR> <MASTER_PORT>");
@@ -83,6 +118,8 @@ public class Master {
 
 		MASTER_ADDR = args[0];
 		MASTER_PORT = Integer.parseInt(args[1]);
+		
+		writeConfig(PROPERTIES, MASTER_ADDR, MASTER_PORT);
 		
 		new Master().run();
 	}
