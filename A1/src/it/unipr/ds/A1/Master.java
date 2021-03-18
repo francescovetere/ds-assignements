@@ -28,6 +28,9 @@ public class Master {
 	private static String MASTER_ADDR;
 	private static int MASTER_PORT;
 	
+	// flag setted to true when the administrator tells the Master (via console) to stop accepting new Nodes
+	private static boolean END_REGISTRATION = false;
+	
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
 	private Map<Integer, String> nodes;
@@ -48,6 +51,41 @@ public class Master {
 		// We use a concurrent hash map, since multiple threads can write on this data structure at once
 		nodes = new ConcurrentHashMap<Integer, String>();
 				
+		/**
+		 * An inner class that handles administrator inputs
+		 * Any time an input is provided, the input is analyzed
+		 * If the input string provided is equal to a special terminator string, we end the registration phase
+		 * just by calling master.close()
+		 */
+		class ConsoleInputHandler implements Runnable {
+			
+			private Master master; // reference to the Master node (necessary in order to call master.close() )
+			
+			public ConsoleInputHandler(final Master master) {
+				this.master = master;
+			}
+			
+			@Override
+			public void run() {		
+				String adminInput;
+				
+				do {
+					System.out.println("Type 'end' to end the registration phase");
+					adminInput = System.console().readLine();
+
+				} while(!adminInput.equals("end"));
+				
+				master.close();
+			}
+			
+		}
+		// Master keep accepting new nodes until the administrator inserts a special input message via console, 
+		// that states the end of the registration phase
+		// This input message, which can be submitted at any time, is handled by a separated thread, as shown in the line below
+		// N.B.: A class is needed, because we need the ability to refer "this" object (Master) in order to call this.close()
+		// 		 the same approach is used in the while loop, when we create a new MasterThread
+		new Thread(new ConsoleInputHandler(this)).start();
+		
 		while (true) {
 			try {
 				Socket s = this.mainSocket.accept();
@@ -60,7 +98,12 @@ public class Master {
 			}
 		}
 
-		this.pool.shutdown();			
+		this.pool.shutdown();
+		
+		System.out.println("\nRegistration phase terminated");
+		System.out.println("Master collected the following " + nodes.size() + " nodes:");
+		nodes.forEach((k,v) -> System.out.println("<" + k + "; " + v + ">"));
+		System.out.println();
 	}
 
 	public ThreadPoolExecutor getPool() {

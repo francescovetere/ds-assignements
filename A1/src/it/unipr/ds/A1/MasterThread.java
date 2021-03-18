@@ -15,8 +15,6 @@ public class MasterThread implements Runnable {
 
 	private Master master;     // reference to the Master node
 	private Socket nodeSocket; // this thread's socket towards a Node that requested a registration
-
-	
 	
 	public MasterThread(final Master master, final Socket nodeSocket) {
 		this.master = master;
@@ -54,25 +52,15 @@ public class MasterThread implements Runnable {
 					Map<Integer, String> nodes = this.master.getNodes();
 
 					nodes.put(nodeId, nodeAddrAndPort);
-					
-					System.out.println("Current list of registered nodes:");
-					nodes.forEach((k,v) -> System.out.println("<" + k + "; " + v + ">"));
 							
+//					System.out.println("Current list of registered nodes:");
+//					nodes.forEach((k,v) -> System.out.println("<" + k + "; " + v + ">"));
+					
 					Thread.sleep(SLEEPTIME);
 
 					if (os == null) {
 						os = new ObjectOutputStream(new BufferedOutputStream(this.nodeSocket.getOutputStream()));
 					}
-					
-					// Administrator message that states the end of the registration phase
-//					System.out.println("Type 'end' to end the registration phase");
-//					String str = System.console().readLine();
-//					System.out.println("String you entered is: " + str);
-//					
-//					if(str.equals("end")) {
-//						master.close();
-//						return;
-//					}
 					
 				}
 			} catch (Exception e) {
