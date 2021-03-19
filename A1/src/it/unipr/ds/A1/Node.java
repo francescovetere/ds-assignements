@@ -7,8 +7,10 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 /**
  * Class that defines a generic peer (node) in the system,
@@ -107,12 +109,25 @@ public class Node {
 				System.out.println("The following nodes are registered in the system");
 				nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
 				System.out.println();
+				
+				NODE_ID = getKey(nodes, registrationString);
+				System.out.println("My ID is " + NODE_ID);
+
 			}
 			
 			masterSocket.close();
 		} catch (IOException | ClassNotFoundException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public <K, V> K getKey(Map<K, V> map, V value) {
+	    for (Entry<K, V> entry : map.entrySet()) {
+	        if (entry.getValue().equals(value)) {
+	            return entry.getKey();
+	        }
+	    }
+	    return null;
 	}
 
 	public static void main(final String[] args) {
@@ -121,8 +136,6 @@ public class Node {
 			System.exit(1);
 		}
 		
-		// TODO: NODE_ID should not be read by command line, but should be generated incrementally
-		//NODE_ID = Integer.parseInt(args[0]);
 		NODE_ADDR = args[0];
 		NODE_PORT = Integer.parseInt(args[1]);
 		

@@ -35,38 +35,14 @@ public class MasterThread implements Runnable {
 
 			if (obj instanceof String) {
 				String registrationString = (String) obj;
-				
-				Random rand = new Random();
-				
-				//Maximum number of nodes
-				int N_MAX = 10;
 
 				System.out.println("Master received request to register from " + registrationString);
-					
-				// Split the string received to obtain id, addr and port of node
-				/* 
-				   String[] registrationStringSplitted = registrationString.split(";");
-				   int nodeId = Integer.parseInt(registrationStringSplitted[0]);
-				   String nodeAddrAndPort = registrationStringSplitted[1];
-				*/
-					
+						
 				// Now, we add the <key, val> pair to the master's HashMap of nodes
 				Map<Integer, String> nodes = this.master.getNodes();
 					
-				// First, we randomly generate the nodeId for last registered Node
-					
-				int nodeId = rand.nextInt(N_MAX);
-				// TODO 
-				// E se invece a nodeId fosse semplicemente assegnato nodes.size() ? Ovvero:
-//				int nodeId = nodes.size();
-					// Potrebbero forse esserci problemi di concorrenza, ma in quel caso allora potremmo usare un AtomicInteger?
-					
-				for (int i : nodes.keySet()) {						
-					do {
-						nodeId = rand.nextInt(N_MAX);
-//						nodeId = nodes.size();
-					} while(nodeId == i);
-				}
+				// Set the Id of the Node with the current size of Nodes list
+				int nodeId = nodes.size();				
 					
 				nodes.put(nodeId, registrationString);
 				
