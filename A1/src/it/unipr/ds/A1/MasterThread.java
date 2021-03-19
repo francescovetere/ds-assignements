@@ -40,18 +40,29 @@ public class MasterThread implements Runnable {
 
 				if (obj instanceof String) {
 					String registrationString = (String) obj;
+					Random rand = new Random();
+					//Maximum number of nodes
+					int N_MAX = 10;
 
-					System.out.println("Master received " + registrationString);
+					System.out.println("Master received request to register from " + registrationString);
 					
 					// Split the string received to obtain id, addr and port of node
-					String[] registrationStringSplitted = registrationString.split(";");
-					int nodeId = Integer.parseInt(registrationStringSplitted[0]);
-					String nodeAddrAndPort = registrationStringSplitted[1];
+					//String[] registrationStringSplitted = registrationString.split(";");
+					//int nodeId = Integer.parseInt(registrationStringSplitted[0]);
+					//String nodeAddrAndPort = registrationStringSplitted[1];
+					int nodeId = rand.nextInt(N_MAX);
 					
 					// Now, we add the <key, val> pair to the master's HashMap of nodes
 					Map<Integer, String> nodes = this.master.getNodes();
-
-					nodes.put(nodeId, nodeAddrAndPort);
+					
+					// Randomly generate the nodeId for last registered Node
+					for (int i : nodes.keySet()) {						
+						do {
+							nodeId = rand.nextInt(N_MAX);
+						} while(nodeId == i);
+					}
+					
+					nodes.put(nodeId, registrationString);
 							
 //					System.out.println("Current list of registered nodes:");
 //					nodes.forEach((k,v) -> System.out.println("<" + k + "; " + v + ">"));

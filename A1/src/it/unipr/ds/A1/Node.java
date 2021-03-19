@@ -7,12 +7,15 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class that defines a generic peer (node) in the system,
  * which can both send and receive messages
  */
 public class Node {
+	private static AtomicInteger atomicInteger = new AtomicInteger();  
+	
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
 	
@@ -80,7 +83,8 @@ public class Node {
 			ObjectInputStream is = null;
 
 			// Each node sends a registration string of this form: id;ip:port
-			String registrationString = NODE_ID + ";" + NODE_ADDR + ":" + NODE_PORT;
+//			String registrationString = NODE_ID + ";" + NODE_ADDR + ":" + NODE_PORT;
+			String registrationString = NODE_ADDR + ":" + NODE_PORT;
 
 			System.out.println("Node sends: " + registrationString + " to master");
 
@@ -109,15 +113,15 @@ public class Node {
 	}
 
 	public static void main(final String[] args) {
-		if (args.length != 3) {
-			System.out.println("Usage: java Node <NODE_ID> <NODE_ADDR> <NODE_PORT>");
+		if (args.length != 2) {
+			System.out.println("Usage: java Node <NODE_ADDR> <NODE_PORT>");
 			System.exit(1);
 		}
 		
 		// TODO: NODE_ID should not be read by command line, but should be generated incrementally
-		NODE_ID = Integer.parseInt(args[0]);
-		NODE_ADDR = args[1];
-		NODE_PORT = Integer.parseInt(args[2]);
+		//NODE_ID = Integer.parseInt(args[0]);
+		NODE_ADDR = args[0];
+		NODE_PORT = Integer.parseInt(args[1]);
 		
 		new Node().run();
 	}
