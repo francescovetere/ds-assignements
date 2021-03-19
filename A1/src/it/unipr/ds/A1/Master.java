@@ -1,14 +1,12 @@
 package it.unipr.ds.A1;
 
 import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -27,9 +25,6 @@ public class Master {
 	
 	private static String MASTER_ADDR;
 	private static int MASTER_PORT;
-	
-	// flag setted to true when the administrator tells the Master (via console) to stop accepting new Nodes
-	private static boolean END_REGISTRATION = false;
 	
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
@@ -97,13 +92,21 @@ public class Master {
 				break;
 			}
 		}
-
+		
+		// At this point, the admin has entered the termination string, so we can notify all the threads in the pool
+		// So that each of them will send to their specific node, the whole map of nodes
+		synchronized(this.pool) {
+			this.pool.notifyAll();
+		}
+		
+		// Finally, we shut down the pool: from now on, there will be no more connections between Master and Nodes
 		this.pool.shutdown();
 		
 		System.out.println("\nRegistration phase terminated");
 		System.out.println("Master collected the following " + nodes.size() + " nodes:");
-		nodes.forEach((k,v) -> System.out.println("<" + k + "; " + v + ">"));
+		nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
 		System.out.println();
+		
 	}
 
 	public ThreadPoolExecutor getPool() {

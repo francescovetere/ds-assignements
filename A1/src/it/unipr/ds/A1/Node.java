@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -91,20 +92,22 @@ public class Node {
 			os.writeObject(registrationString);
 			os.flush();
 				
-			if (is == null) {
+//			if (is == null) {
 				is = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
-			}
+//			}
 
 			System.out.println("Waiting for start message from master");
 			Object o = is.readObject();
+			
+			if (o instanceof Map<?, ?>) {
+				@SuppressWarnings("unchecked")
+				Map<Integer, String> nodes = (Map<Integer, String>) o;
 
-			if (o instanceof String) {
-				String rs = (String) o;
-
-				System.out.println("Node received start message from master: " + rs);
+				System.out.println("Received start message from master");
+				System.out.println("The following nodes are registered in the system");
+				nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
+				System.out.println();
 			}
-
-			is.readObject();
 			
 			masterSocket.close();
 		} catch (IOException | ClassNotFoundException e) {
