@@ -24,3 +24,6 @@ hs_err_pid*
 
 */.project
 */.classpath
+
+.project
+A1/src/it/unipr/ds/A1/config.properties
