@@ -1,0 +1,46 @@
+package it.unipr.ds.A1;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.Socket;
+import java.util.Map;
+
+public class NodeThread implements Runnable {
+
+	private Node node;  		// reference to the Master node
+	private Socket nodeSocket;  // ID of the Node to which this thread sends a Message
+	
+	public NodeThread(Node node, int nodeID) {
+		this.node = node;
+		this.nodeSocket = nodeSocket;
+	}
+
+	@Override
+	public void run() {
+		ObjectInputStream is = null;
+		ObjectOutputStream os = null;
+
+		try {
+			is = new ObjectInputStream(new BufferedInputStream(this.nodeSocket.getInputStream()));
+		} catch (Exception e) {
+			e.printStackTrace();
+			return;
+		}
+
+		try {
+			Object obj = is.readObject();
+
+			if (obj instanceof Message) {
+				Message msg = (Message) obj;
+
+				System.out.println("Received message: " + msg.getMessageID() + " from Node " + msg.getSenderID());
+			}
+		} catch (Exception e) {
+				e.printStackTrace();
+				System.exit(0);
+		}
+	}
+
+}

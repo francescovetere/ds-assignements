@@ -1,0 +1,14 @@
+package it.unipr.ds.A1;
+
+public class NodeThread implements Runnable {
+	
+	public NodeThread() {
+		
+	}
+	
+	@Override
+	public void run() {
+		
+	}
+
+}

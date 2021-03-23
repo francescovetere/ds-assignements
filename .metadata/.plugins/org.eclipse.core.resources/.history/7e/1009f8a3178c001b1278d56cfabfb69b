@@ -1,0 +1,23 @@
+package it.unipr.ds.A1;
+
+import java.io.BufferedInputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.Socket;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+
+public class NodeThread implements Runnable {
+	
+	public NodeThread() {
+		
+	}
+	
+	@Override
+	public void run() {
+	}
+
+}

@@ -1,0 +1,76 @@
+package it.unipr.ds.A1;
+
+import java.io.BufferedInputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.Socket;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+
+public class NodeThread implements Runnable {
+	
+	@Override
+	public void run() {
+		try {
+			System.out.println("Node running (" + NODE_ADDR + ":" + NODE_PORT + ")");
+
+			// Reading .properties file
+			String master = null;
+			try {
+				master = readConfig(PROPERTIES);
+			} catch (IOException e) {
+				System.out.println("File " + PROPERTIES + " not found");
+				e.printStackTrace();
+			}
+
+			// Now, we parse the string obtained by reading the .properties file
+			String[] masterAddrAndPort = master.split(":");
+			MASTER_ADDR = masterAddrAndPort[0];
+			MASTER_PORT = Integer.parseInt(masterAddrAndPort[1]);
+
+			// We open a socket towards the master, and we send our registration message
+			Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT);
+
+			ObjectOutputStream os = new ObjectOutputStream(masterSocket.getOutputStream());
+			ObjectInputStream is = null;
+
+			// Each node sends a registration string of this form: id;ip:port
+//			String registrationString = NODE_ID + ";" + NODE_ADDR + ":" + NODE_PORT;
+			String registrationString = NODE_ADDR + ":" + NODE_PORT;
+
+			System.out.println("Node sends: " + registrationString + " to master");
+
+			os.writeObject(registrationString);
+			os.flush();
+
+//			if (is == null) {
+			is = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
+//			}
+
+			System.out.println("Waiting for start message from master");
+			Object o = is.readObject();
+
+			if (o instanceof Map<?, ?>) {
+				@SuppressWarnings("unchecked")
+				Map<Integer, String> nodes = (Map<Integer, String>) o;
+
+				System.out.println("Received start message from master");
+				System.out.println("The following nodes are registered in the system");
+				nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
+				System.out.println();
+
+				NODE_ID = getKey(nodes, registrationString);
+				System.out.println("My ID is " + NODE_ID);
+
+			}
+
+			masterSocket.close();
+		} catch (IOException | ClassNotFoundException e) {
+			e.printStackTrace();
+		}
+	}
+
+}
