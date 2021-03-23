@@ -6,7 +6,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Map;
-import java.util.Random;
 
 public class MasterThread implements Runnable {
 
@@ -42,7 +41,7 @@ public class MasterThread implements Runnable {
 				Map<Integer, String> nodes = this.master.getNodes();
 					
 				// Set the Id of the Node with the current size of Nodes list
-				int nodeId = nodes.size();				
+				int nodeId = nodes.size();			
 					
 				nodes.put(nodeId, registrationString);
 				
