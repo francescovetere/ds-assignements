@@ -156,19 +156,25 @@ public class Node {
 		// total number of nodes
 		int N = nodes.size();
 
+		/****************************/
+		/*** INITIALIZING SOCKETS ***/
+		/****************************/
 		/*
-		 * i-th node must activate N-i-1 connections in this way, we avoid creating N^2
+		 * Node i must activate N-i-1 connections. In this way, we avoid creating N^2
 		 * connections, because we exploit the fact that TCP connections are
 		 * bidirectional
 		 * 
-		 * So, i-th node add to the global list of sockets, its list of sockets [i] -->
-		 * [socket_i+1, ..., socket_N]
+		 * In the end, we want for each node N sockets
+		 * N - NODE_ID - 1 will be created from the Node itself. 
+		 * The other NODE_ID sockets will be created from
+		 * other Nodes, and this current Node will save them when it receives the first
+		 * Message from them
 		 */
-
 		try {
+			System.out.println("\n*** INITIALIZING SOCKETS ***");
 			List<Socket> createdSockets = new ArrayList<>();
 
-			// This node creates N-NODE_ID-1 sockets
+			// Each node initially creates N - NODE_ID - 1 sockets
 			for (int i = NODE_ID + 1; i < N; ++i) {
 				// We create a socket towards node with ID = i
 
@@ -177,11 +183,7 @@ public class Node {
 
 				createdSockets.add(new Socket(addr, port));
 			}
-			
-			/****************************/
-			/*** INITIALIZING SOCKETS ***/
-			/****************************/
-			System.out.println("\n*** INITIALIZING SOCKETS ***");
+
 			System.out.println("\n---Created " + createdSockets.size() + " sockets---");
 			for (int i = 0; i < createdSockets.size(); ++i) {
 				System.out.println("\t<" + createdSockets.get(i).getInetAddress().getCanonicalHostName() + ":"
@@ -218,20 +220,23 @@ public class Node {
 			for (int i = 0; i < receivedSockets.size(); ++i) {
 				// N.B.: We're printing the local address and port that we created with the
 				// accept()
-				// But it doesn't matter, because the socket is bidirectional
-				System.out.println(
-						"\t<" + receivedSockets.get(i).getInetAddress().getCanonicalHostName() + ":" + receivedSockets.get(i).getPort() + ">");
+				// But it doesn't matter, because sockets are bidirectional
+				System.out.println("\t<" + receivedSockets.get(i).getInetAddress().getCanonicalHostName() + ":"
+						+ receivedSockets.get(i).getPort() + ">");
 			}
 
 			// Now, we merge together the created sockets with the received sockets
+			// so that we obtain the global array of N (-1) sockets that we need in order to
+			// communicate with all the other nodes
 			createdSockets.addAll(receivedSockets);
 			List<Socket> sockets = createdSockets;
 
 			System.out.println("\n---Total " + sockets.size() + " sockets---");
 			for (int i = 0; i < sockets.size(); ++i) {
-				System.out.println("\t<" + sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort() + ">");
+				System.out.println("\t<" + sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
+						+ sockets.get(i).getPort() + ">");
 			}
-			
+
 			/********************************/
 			/*** END INITIALIZING SOCKETS ***/
 			/********************************/
@@ -240,20 +245,21 @@ public class Node {
 			// we can begin our multicast protocol: 1 thread send M messages to all the
 			// sockets, the other N-1 threads receives messages from other
 			// we repeat the process M times
-			
-			
+
 			/********************************/
 			/****** MULTICAST EXCHANGE *****/
 			/********************************/
-			
-			/********** TODO **********
-			 * Quella che segue è una possibile implementazione del multicast
-			 * ancora così non funziona perfettamente, probabilmente ci manca un qualche tipo di sincronizzazione
-			 * con la coda di cui parlava il prof (msgQueue)
+
+			/**********
+			 * TODO ********** Quella che segue è una possibile implementazione del
+			 * multicast ancora così non funziona perfettamente, probabilmente ci manca un
+			 * qualche tipo di sincronizzazione con la coda di cui parlava il prof
+			 * (msgQueue)
 			 */
+
 			/*
 			int M = 1;
-			
+
 			// 1 thread send
 			for (int n_messages = 0; n_messages < M; ++n_messages) {
 				for (int i = 0; i < sockets.size(); ++i) {
@@ -261,8 +267,8 @@ public class Node {
 						continue; // we don't want to send to ourselves
 					ObjectOutputStream nodeOs = new ObjectOutputStream(sockets.get(i).getOutputStream());
 
-					// We send a Message object
-					// TODO implement a "better" message id generation (incremental)
+					// We send a Message object // TODO implement a "better" message id generation
+					// (incremental)
 
 					Message msg = new Message(NODE_ID, MSG_ID);
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
@@ -281,11 +287,13 @@ public class Node {
 				Socket s = sockets.get(i);
 				this.pool.execute(new NodeThread(this, s));
 			}
+			
 			*/
-
+			
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		
 
 	}
 
