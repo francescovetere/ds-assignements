@@ -31,6 +31,8 @@ public class Node {
 	private static int NODE_ID;
 	private static String NODE_ADDR;
 	private static int NODE_PORT;
+	
+	private static int MSG_ID;
 
 	private static final String PROPERTIES = "config.properties";
 	
@@ -181,12 +183,13 @@ public class Node {
 
 								// We send a Message object
 								// TODO implement a "better" message id generation (incremental)
-								Random rnd = new Random();
-								int msgID = rnd.nextInt(M);
+								//Random rnd = new Random();
+								//int msgID = rnd.nextInt(M);
 								
-								Message msg = new Message(addr, msgID);
+								Message msg = new Message(NODE_ID, MSG_ID);
 								System.out.println("Node sends: " + msg.getMessageID() + " to node " + nodeID);
 
+								//TODO send msg only if generated random value is bigger than 0,05 
 								nodeOs.writeObject(msg);
 								nodeOs.flush();
 							} catch (Exception e) {
@@ -195,8 +198,7 @@ public class Node {
 						}
 					}).start();
 				}
-				
-				
+								
 				// Receive msg from every node with smaller ID
 				for(int i = 0; i < NODE_ID; ++i) {
 					Socket s = receivingSocket.accept();
@@ -204,6 +206,8 @@ public class Node {
 					// Each connection is then handled by a new thread, in the following way
 					this.pool.execute(new NodeThread(this, s));
 				}
+				
+				MSG_ID++;
 			}
 			
 		} catch (IOException | ClassNotFoundException e) {

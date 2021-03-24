@@ -8,15 +8,15 @@ import java.io.Serializable;
 public final class Message implements Serializable { 
 	private static final long serialVersionUID = 1L;
 
-	private String senderID;
+	private int senderID;
 	private int messageID;
 	
-	public Message(String senderID, int messageID) {
+	public Message(int senderID, int messageID) {
 		this.senderID = senderID;
 		this.messageID = messageID;
 	}
 	
-	public String getSenderID() {
+	public int getSenderID() {
 		return senderID;
 	}
 	
@@ -28,7 +28,7 @@ public final class Message implements Serializable {
 		return messageID;
 	}
 	
-	public void setSenderID(String senderID) {
+	public void setSenderID(int senderID) {
 		this.senderID = senderID;
 	}
 }
