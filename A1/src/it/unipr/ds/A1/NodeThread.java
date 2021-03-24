@@ -29,9 +29,9 @@ public class NodeThread implements Runnable {
 			Object obj = is.readObject();
 
 			if (obj instanceof Message) {
-				Message msg = (Message) obj;
+				Message msg = (Message) obj;  
 
-				System.out.println("Received message: " + msg.getMessageID() + " from Node " + msg.getSenderID());
+				System.out.println("**Received message: " + msg.getMessageID() + " from node " + msg.getSenderID());
 			}
 			
 			// TODO: Bisognerebbe chiamare node.close() a un certo punto (?)
