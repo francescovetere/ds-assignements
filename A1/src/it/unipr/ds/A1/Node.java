@@ -7,7 +7,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +39,7 @@ public class Node {
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
-	private Queue<Message> msgQueue = new LinkedBlockingQueue<>();
+	// private Queue<Message> msgQueue = new LinkedBlockingQueue<>();
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
@@ -156,21 +155,20 @@ public class Node {
 		// total number of nodes
 		int N = nodes.size();
 
-		/****************************/
-		/*** INITIALIZING SOCKETS ***/
-		/****************************/
-		/*
-		 * Node i must activate N-i-1 connections. In this way, we avoid creating N^2
-		 * connections, because we exploit the fact that TCP connections are
-		 * bidirectional
-		 * 
-		 * In the end, we want for each node N sockets
-		 * N - NODE_ID - 1 will be created from the Node itself. 
-		 * The other NODE_ID sockets will be created from
-		 * other Nodes, and this current Node will save them when it receives the first
-		 * Message from them
-		 */
 		try {
+			/****************************/
+			/*** INITIALIZING SOCKETS ***/
+			/****************************/
+			/*
+			 * Node i must activate N-i-1 connections. In this way, we avoid creating N^2
+			 * connections, because we exploit the fact that TCP connections are
+			 * bidirectional
+			 * 
+			 * In the end, we want for each node N sockets N - NODE_ID - 1 will be created
+			 * from the Node itself. The other NODE_ID sockets will be created from other
+			 * Nodes, and this current Node will save them when it receives the first
+			 * Message from them
+			 */
 			System.out.println("\n*** INITIALIZING SOCKETS ***");
 			List<Socket> createdSockets = new ArrayList<>();
 
@@ -199,7 +197,8 @@ public class Node {
 				// TODO implement a "better" message id generation (incremental)
 
 				Message msg = new Message(NODE_ID, MSG_ID);
-				System.out.println("*Send message: " + msg.getMessageID() + " on socket "
+
+				System.out.println("*Send setup message: " + msg.getMessageID() + " on socket "
 						+ createdSockets.get(i).getInetAddress().getCanonicalHostName() + ":"
 						+ createdSockets.get(i).getPort());
 
@@ -213,7 +212,31 @@ public class Node {
 			for (int i = 0; i < NODE_ID; ++i) {
 				Socket s = receivingSocket.accept();
 				receivedSockets.add(s);
-				this.pool.execute(new NodeThread(this, s));
+				// this.pool.execute(new NodeThread(this, s));
+				new Thread(new Runnable() {
+					@Override
+					public void run() {
+						ObjectInputStream is = null;
+
+						try {
+							is = new ObjectInputStream(s.getInputStream());
+
+							Object obj = is.readObject();
+
+							if (obj instanceof Message) {
+								Message msg = (Message) obj;
+
+								System.out.println("**Received setup message: " + msg.getMessageID() + " from node "
+										+ msg.getSenderID());
+							}
+
+						} catch (Exception e) {
+							e.printStackTrace();
+							System.exit(-1);
+						}
+
+					}
+				}).start();
 			}
 
 			System.out.println("\n---Received " + receivedSockets.size() + " sockets---");
@@ -257,43 +280,75 @@ public class Node {
 			 * (msgQueue)
 			 */
 
-			/*
-			int M = 1;
+			int M = 5;
 
-			// 1 thread send
 			for (int n_messages = 0; n_messages < M; ++n_messages) {
+				// 1 thread send
 				for (int i = 0; i < sockets.size(); ++i) {
-					if (i == NODE_ID)
-						continue; // we don't want to send to ourselves
 					ObjectOutputStream nodeOs = new ObjectOutputStream(sockets.get(i).getOutputStream());
 
-					// We send a Message object // TODO implement a "better" message id generation
-					// (incremental)
+					// We send a Message object
+					// TODO implement a "better" message id generation (incremental)
 
 					Message msg = new Message(NODE_ID, MSG_ID);
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
 							+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort());
+					// int port = 0;
+					// if (sockets.get(i).getLocalPort() < sockets.get(i).getLocalPort())
+					// port = sockets.get(i).getPort();
+					// else
+					// port = sockets.get(i).getLocalPort();
+					// System.out.println(sockets.get(i).getInetAddress().getCanonicalHostName() +
+					// ":" + port);
+					// System.out.println("*Send message: " + msg.getMessageID() + " to node: "
+					// + getKey(nodes, sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
+					// + port));
 
 					// TODO send msg only if generated random value is bigger than 0,05
 					nodeOs.writeObject(msg);
 					nodeOs.flush();
 				}
+
+				++MSG_ID;
 			}
 
 			// N-1 threads receive
-			for (int i = 0; i < N - 1; ++i) {
-				if (i == NODE_ID)
-					continue; // we don't want to receive from ourselves
+			for (int i = 0; i < sockets.size(); ++i) {
 				Socket s = sockets.get(i);
-				this.pool.execute(new NodeThread(this, s));
+				// this.pool.execute(new NodeThread(this, s));
+				new Thread(new Runnable() {
+					@Override
+					public void run() {
+						while (true) {
+							ObjectInputStream is = null;
+
+							try {
+								is = new ObjectInputStream(s.getInputStream());
+
+								Object obj = is.readObject();
+
+								if (obj instanceof Message) {
+									Message msg = (Message) obj;
+
+									System.out.println("**Received message: " + msg.getMessageID() + " from node "
+											+ msg.getSenderID());
+
+									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
+									// Thread.sleep(1000);
+								}
+							} catch (Exception e) {
+								e.printStackTrace();
+								System.exit(0);
+							}
+						}
+					}
+
+				}).start();
 			}
-			
-			*/
-			
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		
 
 	}
 
