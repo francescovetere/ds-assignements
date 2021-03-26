@@ -16,6 +16,7 @@ import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+ 
 
 /**
  * Class that defines a generic peer (node) in the system, which can both send
@@ -46,7 +47,7 @@ public class Node {
 	private Map<Integer, String> nodes;
 
 	private ThreadPoolExecutor pool;
-
+	
 	public Node() throws IOException {
 		this.receivingSocket = new ServerSocket(NODE_PORT);
 	}
@@ -54,38 +55,6 @@ public class Node {
 	// The socket from which this Node will be receiving messages from other Nodes
 	private ServerSocket receivingSocket;
 
-	/**
-	 * Method that reads and parses a .properties file, containing the address and
-	 * the port of the master node TODO Maybe this file could contain something
-	 * else?
-	 * 
-	 * @param properties String that identifies the properties file
-	 * 
-	 * @return a String, containing master_addr and master_port separated by ":"
-	 * 
-	 * @throws IOException
-	 */
-	private String readConfig(final String properties) throws IOException {
-		// Create a reader object on the properties file
-		FileReader reader = new FileReader(properties);
-
-		// Create properties object
-		Properties p = new Properties();
-
-		// Add a wrapper around reader object
-		p.load(reader);
-
-		// Access properties data
-		String serversProperty = p.getProperty("master");
-
-		// Split over ";"
-		String[] serversAndPorts = serversProperty.split(",");
-
-		String address = serversAndPorts[0];
-		int port = Integer.parseInt(serversAndPorts[1].trim());
-
-		return address + ":" + port;
-	}
 
 	@SuppressWarnings("unchecked") // nodes = (Map<Integer, String>) o; (TODO make a "cleaner" cast)
 	public void run() {
@@ -94,10 +63,10 @@ public class Node {
 		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
 				new LinkedBlockingQueue<Runnable>());
 
-		// Reading .properties file
+		// Reading .properties file to get Master address and port
 		String master = null;
 		try {
-			master = readConfig(PROPERTIES);
+			master = Utility.readConfig(PROPERTIES);
 		} catch (IOException e) {
 			System.out.println("File " + PROPERTIES + " not found");
 			e.printStackTrace();
@@ -149,7 +118,7 @@ public class Node {
 			e.printStackTrace();
 		}
 
-		NODE_ID = getKey(nodes, registrationString);
+		NODE_ID = Utility.getKey(nodes, registrationString);
 		System.out.println("My ID is " + NODE_ID);
 
 		// total number of nodes
@@ -293,16 +262,6 @@ public class Node {
 					Message msg = new Message(NODE_ID, MSG_ID);
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
 							+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort());
-					// int port = 0;
-					// if (sockets.get(i).getLocalPort() < sockets.get(i).getLocalPort())
-					// port = sockets.get(i).getPort();
-					// else
-					// port = sockets.get(i).getLocalPort();
-					// System.out.println(sockets.get(i).getInetAddress().getCanonicalHostName() +
-					// ":" + port);
-					// System.out.println("*Send message: " + msg.getMessageID() + " to node: "
-					// + getKey(nodes, sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
-					// + port));
 
 					// TODO send msg only if generated random value is bigger than 0,05
 					nodeOs.writeObject(msg);
@@ -365,14 +324,6 @@ public class Node {
 		return nodes;
 	}
 
-	public <K, V> K getKey(Map<K, V> map, V value) {
-		for (Entry<K, V> entry : map.entrySet()) {
-			if (entry.getValue().equals(value)) {
-				return entry.getKey();
-			}
-		}
-		return null;
-	}
 
 	public static void main(final String[] args) throws IOException {
 		if (args.length != 2) {

@@ -12,5 +12,5 @@ gnome-terminal -e "bash -c \"$NODE2_PATH exec bash\"";
 NODE3_PATH="java -classpath bin it.unipr.ds.A1.Node localhost 4002;"
 gnome-terminal -e "bash -c \"$NODE3_PATH exec bash\"";
 
-# NODE4_PATH="java -classpath bin it.unipr.ds.A1.Node localhost 4003;"
-# gnome-terminal -e "bash -c \"$NODE4_PATH exec bash\"";
+NODE4_PATH="java -classpath bin it.unipr.ds.A1.Node localhost 4003;"
+gnome-terminal -e "bash -c \"$NODE4_PATH exec bash\"";

@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  * communication nodes
  */
 public class Master {
-	private static final int COREPOOL = 5;
+	private static final int COREPOOL = 10;
 	private static final int MAXPOOL = 100;
 	private static final long IDLETIME = 5000;
 
@@ -133,27 +133,6 @@ public class Master {
 		}
 	}
 
-	/**
-	 * Method that write on the properties file an (address, port) pair Used to
-	 * initialize the config file after Master node starting
-	 * 
-	 * @param properties String that identifies the properties file
-	 * @param address    String that identifies the address (key)
-	 * @param port       Int that identifies the port (value)
-	 * 
-	 * @throws IOException
-	 */
-	public static void writeConfig(final String properties, final String address, final int port) throws IOException {
-		// Create an OutputStream to write on file
-		try (OutputStream output = new FileOutputStream(properties)) {
-			Properties p = new Properties();
-			p.setProperty("master", address + "," + port);
-			p.store(output, null);
-		} catch (IOException io) {
-			io.printStackTrace();
-		}
-
-	}
 
 	public static void main(final String[] args) throws IOException {
 		if (args.length != 2) {
@@ -164,7 +143,7 @@ public class Master {
 		MASTER_ADDR = args[0];
 		MASTER_PORT = Integer.parseInt(args[1]);
 
-		writeConfig(PROPERTIES, MASTER_ADDR, MASTER_PORT);
+		Utility.writeConfig(PROPERTIES, MASTER_ADDR, MASTER_PORT);
 
 		new Master().run();
 	}
