@@ -13,6 +13,15 @@ import java.util.Map.Entry;
  */
 public class Utility {
 	
+	/**
+	 * Method that reads a map and a value, and return the first key in the map 
+	 * that corresponds to that value
+	 * @param <K> key type
+	 * @param <V> value type
+	 * @param map the map from which the key will be extracted
+	 * @param value the value to search in the map
+	 * @return the first key in the map that corresponds to value
+	 */
 	public static <K, V> K getKey(Map<K, V> map, V value) {
 		for (Entry<K, V> entry : map.entrySet()) {
 			if (entry.getValue().equals(value)) {
@@ -25,13 +34,11 @@ public class Utility {
 	
 	/**
 	 * Method that reads and parses a .properties file, containing the address and
-	 * the port of the master node TODO Maybe this file could contain something
-	 * else?
+	 * the port of the master node 
+	 * TODO: Maybe this file could contain something else?
 	 * 
 	 * @param properties String that identifies the properties file
-	 * 
 	 * @return a String, containing master_addr and master_port separated by ":"
-	 * 
 	 * @throws IOException
 	 */
 	public static String readConfig(final String properties) throws IOException {
@@ -58,13 +65,12 @@ public class Utility {
 	
 	
 	/**
-	 * Method that write on the .properties file an (address, port) pair 
+	 * Method that writes on the .properties file an (address, port) pair 
 	 * Used to initialize the config file after Master node starting
 	 * 
 	 * @param properties String that identifies the properties file
 	 * @param address    String that identifies the address (key)
 	 * @param port       Int that identifies the port (value)
-	 * 
 	 * @throws IOException
 	 */
 	public static void writeConfig(final String properties, final String address, final int port) throws IOException {

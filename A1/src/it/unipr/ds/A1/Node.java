@@ -242,13 +242,6 @@ public class Node {
 			/****** MULTICAST EXCHANGE *****/
 			/********************************/
 
-			/**********
-			 * TODO ********** Quella che segue è una possibile implementazione del
-			 * multicast ancora così non funziona perfettamente, probabilmente ci manca un
-			 * qualche tipo di sincronizzazione con la coda di cui parlava il prof
-			 * (msgQueue)
-			 */
-
 			int M = 5;
 
 			for (int n_messages = 0; n_messages < M; ++n_messages) {
