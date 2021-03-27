@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class that defines a master node, which provides a naming service for the
@@ -107,12 +108,17 @@ public class Master {
 
 		// Finally, we shut down the pool: from now on, there will be no more
 		// connections between Master and Nodes
-		this.pool.shutdown();
+		//this.pool.shutdown();
 
 		System.out.println("\nRegistration phase terminated");
 		System.out.println("Master collected the following " + nodes.size() + " nodes:");
 		nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
 		System.out.println();
+
+		System.out.println("\nWaiting for node termination...");
+		// System.out.println(this.atom.incrementAndGet());
+
+
 	}
 
 	public ThreadPoolExecutor getPool() {

@@ -102,10 +102,10 @@ public class Node {
 		// id will be assigned by Master
 		String registrationString = null;
 
+		ObjectOutputStream os = null;
+		ObjectInputStream is = null;
 
 		try {
-			ObjectOutputStream os = null;
-			ObjectInputStream is = null;
 			// We open a socket towards the master, and we send our registration message
 			masterSocket = new Socket(MASTER_ADDR, MASTER_PORT);
 
@@ -283,20 +283,22 @@ public class Node {
 					// TODO implement a "better" message id generation (incremental)
 
 					Message msg = new Message(NODE_ID, MSG_ID);
-					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
-							+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort());
-
 					
 					float val = r.nextFloat();
 					// System.out.println("\t\tval: " + val);
 
 					if (val >= this.LP) {
+						System.out.println("*Send message: " + msg.getMessageID() + " on socket "
+						+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort());
+
 						nodeOs.writeObject(msg);
 						nodeOs.flush();
 					}
 
 					else {
-						System.out.println("Message lost");
+						System.out.println("Message lost!");
+						nodeOs.writeObject(null);
+						nodeOs.flush();
 					}
 
 				}
@@ -354,15 +356,19 @@ public class Node {
 			e.printStackTrace();
 		}
 
-		// try {
-		// 	// TODO: send statistical result to master
-		// 	// Object stats = new Object();
-		// 	// os.writeObject(stats);
+		try {
+			// TODO: send statistical result to master
+			//Object stats = new Object();
+			os = new ObjectOutputStream(masterSocket.getOutputStream());
+			
+			Boolean testVal = true;
+			os.writeObject(testVal);
+			os.flush();
 
-		// 	masterSocket.close();
-		// } catch (IOException e) {
-		// 	e.printStackTrace();
-		// }
+			masterSocket.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public void close() {
