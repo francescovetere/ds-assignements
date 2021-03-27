@@ -1,17 +1,16 @@
 package it.unipr.ds.A1;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
+import java.io.ObjectInputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class that defines a master node, which provides a naming service for the
@@ -108,7 +107,7 @@ public class Master {
 
 		// Finally, we shut down the pool: from now on, there will be no more
 		// connections between Master and Nodes
-		//this.pool.shutdown();
+		// this.pool.shutdown();
 
 		System.out.println("\nRegistration phase terminated");
 		System.out.println("Master collected the following " + nodes.size() + " nodes:");
@@ -118,6 +117,54 @@ public class Master {
 		System.out.println("\nWaiting for node termination...");
 		// System.out.println(this.atom.incrementAndGet());
 
+		try {
+			this.mainSocket = new ServerSocket(MASTER_PORT);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		// The threads that will manage the reception of the inital(setup) messages from
+		// other nodes
+		List<Thread> receivingThreads = new ArrayList<>();
+
+		try {
+			for (int i = 0; i < nodes.size(); ++i) {
+				Socket s = mainSocket.accept();
+				Thread t = new Thread(new Runnable() {
+					@Override
+					public void run() {
+						ObjectInputStream is = null;
+
+						try {
+							is = new ObjectInputStream(s.getInputStream());
+
+							Object obj = is.readObject();
+
+							if (obj instanceof Statistics) {
+								Statistics statistics = (Statistics) obj;
+								System.out.println("**Received termination message from Node " + statistics.nodeID
+										+ ":\n" + statistics);
+							}
+
+						} catch (Exception e) {
+							e.printStackTrace();
+							System.exit(-1);
+						}
+
+					}
+				});
+
+				t.start();
+				receivingThreads.add(t);
+			}
+
+			// Wait for every receving thread to terminate
+			for (int i = 0; i < receivingThreads.size(); ++i)
+				receivingThreads.get(i).join();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 
 	}
 
@@ -137,7 +184,6 @@ public class Master {
 			e.printStackTrace();
 		}
 	}
-
 
 	public static void main(final String[] args) throws IOException {
 		if (args.length != 2) {

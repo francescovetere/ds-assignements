@@ -5,30 +5,44 @@ import java.io.Serializable;
 /**
  * Class that defines the structure of a Message
  */
-public final class Message implements Serializable { 
-	private static final long serialVersionUID = 1L;
+public final class Message implements Serializable {
+	private static final long serialVersionUID = -8002716552973566762L;
 
 	private int senderID;
 	private int messageID;
-	
-	public Message(int senderID, int messageID) {
+	private String body;
+
+	public Message(int senderID, int messageID, String body) {
 		this.senderID = senderID;
 		this.messageID = messageID;
+		this.body = body;
 	}
-	
+
+	public Message(int senderID, int messageID) {
+		this(senderID, messageID, "<empty body>");
+	}
+
 	public int getSenderID() {
 		return senderID;
 	}
-	
+
 	public void setMessageID(int messageID) {
 		this.messageID = messageID;
 	}
-	
+
 	public int getMessageID() {
 		return messageID;
 	}
-	
+
 	public void setSenderID(int senderID) {
 		this.senderID = senderID;
+	}
+
+	public String getBody() {
+		return body;
+	}
+
+	public void setBody(String body) {
+		this.body = body;
 	}
 }

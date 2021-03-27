@@ -12,22 +12,18 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Class that defines a generic peer (node) in the system, which can both send
  * and receive messages
  */
 public class Node {
-	private static final int COREPOOL = 5;
-	private static final int MAXPOOL = 100;
-	private static final long IDLETIME = 5000;
+	// private static final int COREPOOL = 5;
+	// private static final int MAXPOOL = 100;
+	// private static final long IDLETIME = 5000;
 
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
-	private Socket masterSocket = null;
 
 	private static int NODE_ID;
 	private static String NODE_ADDR;
@@ -38,8 +34,16 @@ public class Node {
 	private static final String PROPERTIES = "config.properties";
 	// Probability of error
 	private float LP;
+
 	// Number of messages
 	private int M;
+
+	private double totTime = 0;
+	private double avgTime = 0;
+	private int numSent = 0;
+	private int numResent = 0;
+	private int numReceived = 0;
+	private int numLost = 0;
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
@@ -49,7 +53,7 @@ public class Node {
 	// in the form <key, val> where key = ID, val = ip:port
 	private Map<Integer, String> nodes;
 
-	private ThreadPoolExecutor pool;
+	// private ThreadPoolExecutor pool;
 
 	public Node() throws IOException {
 		this.receivingSocket = new ServerSocket(NODE_PORT);
@@ -68,8 +72,8 @@ public class Node {
 		this.LP = Float.parseFloat(LP);
 		this.M = Integer.parseInt(M);
 
-		System.out.println("LP: " + this.LP);
-		System.out.println("M: " + this.M);
+		// System.out.println("LP: " + this.LP);
+		// System.out.println("M: " + this.M);
 	}
 
 	// The socket from which this Node will be receiving messages from other Nodes
@@ -79,8 +83,9 @@ public class Node {
 	public void run() {
 		System.out.println("Node running (" + NODE_ADDR + ":" + NODE_PORT + ")");
 
-		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
-				new LinkedBlockingQueue<Runnable>());
+		// this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME,
+		// TimeUnit.MILLISECONDS,
+		// new LinkedBlockingQueue<Runnable>());
 
 		// Reading .properties file to get Master address and port
 		String masterAddrAndPort = null;
@@ -105,14 +110,11 @@ public class Node {
 		ObjectOutputStream os = null;
 		ObjectInputStream is = null;
 
-		try {
-			// We open a socket towards the master, and we send our registration message
-			masterSocket = new Socket(MASTER_ADDR, MASTER_PORT);
-
+		// We open a socket towards the master, and we send our registration message
+		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
 			os = new ObjectOutputStream(masterSocket.getOutputStream());
 
 			registrationString = NODE_ADDR + ":" + NODE_PORT;
-
 			System.out.println("Node sends: " + registrationString + " to master");
 
 			os.writeObject(registrationString);
@@ -148,7 +150,7 @@ public class Node {
 		int N = nodes.size();
 
 		// allocate space for every queue
-		for(int i = 0; i < N; ++i)
+		for (int i = 0; i < N; ++i)
 			msgQueue.add(new ConcurrentLinkedQueue<>());
 
 		try {
@@ -198,18 +200,27 @@ public class Node {
 						+ createdSockets.get(i).getInetAddress().getCanonicalHostName() + ":"
 						+ createdSockets.get(i).getPort());
 
-				// TODO send msg only if generated random value is bigger than 0,05
+				long startTime = System.nanoTime();
 				nodeOs.writeObject(msg);
 				nodeOs.flush();
+				long elapsedTime = (System.nanoTime() - startTime);
+
+				this.totTime += elapsedTime * Math.pow(10, -6); // nanosecond --> milliseconds
 			}
 
 			// The remaining NODE_ID sockets, will be received from other nodes
 			List<Socket> receivedSockets = new ArrayList<>();
+
+			// The threads that will manage the reception of the inital(setup) messages from
+			// other nodes
+			List<Thread> setupThreads = new ArrayList<>();
+
 			for (int i = 0; i < NODE_ID; ++i) {
 				Socket s = receivingSocket.accept();
 				receivedSockets.add(s);
 				// this.pool.execute(new NodeThread(this, s));
-				new Thread(new Runnable() {
+
+				Thread t = new Thread(new Runnable() {
 					@Override
 					public void run() {
 						ObjectInputStream is = null;
@@ -232,8 +243,15 @@ public class Node {
 						}
 
 					}
-				}).start();
+				});
+
+				t.start();
+				setupThreads.add(t);
 			}
+
+			// Wait for every receving thread to terminate
+			for (int i = 0; i < setupThreads.size(); ++i)
+				setupThreads.get(i).join();
 
 			System.out.println("\n---Received " + receivedSockets.size() + " sockets---");
 			for (int i = 0; i < receivedSockets.size(); ++i) {
@@ -269,9 +287,7 @@ public class Node {
 			/****** MULTICAST EXCHANGE *****/
 			/********************************/
 
-			int M = 5;
-
-			// Send msg only if generated random value is bigger than 0,05
+			// Send msg only if generated random value is bigger than 0.05
 			Random r = new Random(NODE_ID);
 
 			for (int n_messages = 0; n_messages < M; ++n_messages) {
@@ -283,19 +299,32 @@ public class Node {
 					// TODO implement a "better" message id generation (incremental)
 
 					Message msg = new Message(NODE_ID, MSG_ID);
-					
-					float val = r.nextFloat();
+
+					// If this is the last iteration, we send to every Node the termination message
+					if (n_messages == M - 1)
+						msg.setBody("end");
+
+					float randomVal = r.nextFloat();
 					// System.out.println("\t\tval: " + val);
 
-					if (val >= this.LP) {
-						System.out.println("*Send message: " + msg.getMessageID() + " on socket "
-						+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort());
+					if (randomVal >= this.LP) {
+						++numSent;
 
+						System.out.println("*Send message: " + msg.getMessageID() + " on socket "
+								+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
+								+ sockets.get(i).getPort());
+
+						long startTime = System.nanoTime();
 						nodeOs.writeObject(msg);
 						nodeOs.flush();
+						long elapsedTime = (System.nanoTime() - startTime);
+
+						this.totTime += elapsedTime * Math.pow(10, -6); // nanosecond --> milliseconds
 					}
 
 					else {
+						++numLost;
+
 						System.out.println("Message lost!");
 						nodeOs.writeObject(null);
 						nodeOs.flush();
@@ -307,10 +336,13 @@ public class Node {
 			}
 
 			// N-1 threads receive
+			List<Thread> receivingThreads = new ArrayList<>();
+
 			for (int i = 0; i < sockets.size(); ++i) {
 				Socket s = sockets.get(i);
 				// this.pool.execute(new NodeThread(this, s));
-				new Thread(new Runnable() {
+				Thread t = new Thread(new Runnable() {
+
 					@Override
 					public void run() {
 						while (true) {
@@ -322,50 +354,69 @@ public class Node {
 								Object obj = is.readObject();
 
 								if (obj instanceof Message) {
+									++numReceived;
+
 									Message msg = (Message) obj;
+
+									// msgQueue.get(msg.getSenderID()).add(msg); // TODO: handling msg queue
+
+									// System.out.println(msg.getBody());
+
+									if (msg.getBody().equals("end")) {
+										// receivingSocket.close();
+										s.close();
+									}
 
 									System.out.println("**Received message: " + msg.getMessageID() + " from node "
 											+ msg.getSenderID());
-									
-									// msgQueue.get(msg.getSenderID()).add(msg);
-									
-									// if(msgQueue.get(msg.getSenderID()).size() == M) {
-									// 	// receivingSocket.close();
-									// 	System.out.println("Communication between " + NODE_ID + " and " + msg.getSenderID() + " ended");
-									
-									// 	s.close();
-									// }
 
 									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
 									// Thread.sleep(1000);
 								}
-							} catch (ClassNotFoundException | IOException e) {
-								System.out.println("Internal catch");
-								e.printStackTrace();
-								System.exit(0);
+							} catch (Exception e) {
+								break;
 							}
 						}
 					}
 
-				}).start();
+				});
+
+				t.start();
+				receivingThreads.add(t);
 			}
 
-		
+			// Wait for every receving thread to terminate
+			for (int i = 0; i < receivingThreads.size(); ++i)
+				receivingThreads.get(i).join();
+
+			this.avgTime = this.totTime / this.numSent;
+
 		} catch (Exception e) {
-			System.out.println("External catch");
 			e.printStackTrace();
 		}
 
-		try {
-			// TODO: send statistical result to master
-			//Object stats = new Object();
+		System.out.println("\n\tMulticast exchange terminated correctly\n");
+
+		// Now, we open a socket towards the master, and we send our statistics data
+		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
 			os = new ObjectOutputStream(masterSocket.getOutputStream());
-			
-			Boolean testVal = true;
-			os.writeObject(testVal);
+
+			Statistics statistics = new Statistics();
+			statistics.nodeID = NODE_ID;
+			statistics.totTime = this.totTime;
+			statistics.avgTime = this.avgTime;
+			statistics.numSent = this.numSent;
+			statistics.numResent = this.numResent;
+			statistics.numReceived = this.numReceived;
+			statistics.numLost = this.numLost;
+
+			System.out.println("Node sends its statistics to master, and terminate its execution");
+			System.out.println(statistics);
+
+			os.writeObject(statistics);
 			os.flush();
 
-			masterSocket.close();
+			os.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
