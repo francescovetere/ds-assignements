@@ -9,9 +9,9 @@ import java.util.Map;
 
 public class MasterThread implements Runnable {
 
-	private Master master;     // reference to the Master node
+	private Master master; // reference to the Master node
 	private Socket nodeSocket; // this thread's socket towards a Node that requested a registration
-	
+
 	public MasterThread(final Master master, final Socket nodeSocket) {
 		this.master = master;
 		this.nodeSocket = nodeSocket;
@@ -36,34 +36,43 @@ public class MasterThread implements Runnable {
 				String registrationString = (String) obj;
 
 				System.out.println("Master received request to register from " + registrationString);
-						
+
 				// Now, we add the <key, val> pair to the master's HashMap of nodes
 				Map<Integer, String> nodes = this.master.getNodes();
-					
+
 				// Set the Id of the Node with the current size of Nodes list
-				int nodeId = nodes.size();			
-					
+				int nodeId = nodes.size();
+
 				nodes.put(nodeId, registrationString);
-				
-				// We wait on the pool object, until the Master will wake up this and all other threads in the pool
+
+				// We wait on the pool object, until the Master will wake up this and all other
+				// threads in the pool
 				// That is, when the admin will enter the termination string
-				synchronized(this.master.getPool()) {
+				synchronized (this.master.getPool()) {
 					this.master.getPool().wait();
 				}
-				
+
 				if (os == null) {
 					os = new ObjectOutputStream(new BufferedOutputStream(this.nodeSocket.getOutputStream()));
 				}
-				
+
 				// Now, we send the whole map of nodes to each node
 				os.writeObject(nodes);
 				os.flush();
-					
+
+				// TODO: Wait for all the statistical results
+				// is = new ObjectInputStream(new BufferedInputStream(this.nodeSocket.getInputStream()));
+				// is.readObject();
+
+				// if (!(o instanceof Statistics)) {
+				// System.out.println("Not a Stat");
+				// System.exit(-1);
+				// }
 			}
 		} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(0);
+			e.printStackTrace();
+			System.exit(0);
 		}
-		
+
 	}
 }

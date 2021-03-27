@@ -113,7 +113,6 @@ public class Master {
 		System.out.println("Master collected the following " + nodes.size() + " nodes:");
 		nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
 		System.out.println();
-
 	}
 
 	public ThreadPoolExecutor getPool() {

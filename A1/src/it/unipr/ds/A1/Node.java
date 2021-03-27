@@ -1,7 +1,6 @@
 package it.unipr.ds.A1;
 
 import java.io.BufferedInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -10,13 +9,12 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Properties;
 import java.util.Queue;
+import java.util.Random;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
- 
 
 /**
  * Class that defines a generic peer (node) in the system, which can both send
@@ -29,6 +27,7 @@ public class Node {
 
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
+	private Socket masterSocket = null;
 
 	private static int NODE_ID;
 	private static String NODE_ADDR;
@@ -37,24 +36,44 @@ public class Node {
 	private static int MSG_ID;
 
 	private static final String PROPERTIES = "config.properties";
+	// Probability of error
+	private float LP;
+	// Number of messages
+	private int M;
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
-	// private Queue<Message> msgQueue = new LinkedBlockingQueue<>();
+	private List<Queue<Message>> msgQueue = new ArrayList<>();
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
 	private Map<Integer, String> nodes;
 
 	private ThreadPoolExecutor pool;
-	
+
 	public Node() throws IOException {
 		this.receivingSocket = new ServerSocket(NODE_PORT);
+
+		String LP = null;
+		String M = null;
+
+		try {
+			LP = Utility.readConfig(PROPERTIES, "LP");
+			M = Utility.readConfig(PROPERTIES, "M");
+		} catch (IOException e) {
+			System.out.println("File " + PROPERTIES + " not found");
+			e.printStackTrace();
+		}
+
+		this.LP = Float.parseFloat(LP);
+		this.M = Integer.parseInt(M);
+
+		System.out.println("LP: " + this.LP);
+		System.out.println("M: " + this.M);
 	}
 
 	// The socket from which this Node will be receiving messages from other Nodes
 	private ServerSocket receivingSocket;
-
 
 	@SuppressWarnings("unchecked") // nodes = (Map<Integer, String>) o; (TODO make a "cleaner" cast)
 	public void run() {
@@ -64,28 +83,33 @@ public class Node {
 				new LinkedBlockingQueue<Runnable>());
 
 		// Reading .properties file to get Master address and port
-		String master = null;
+		String masterAddrAndPort = null;
 		try {
-			master = Utility.readConfig(PROPERTIES);
+			masterAddrAndPort = Utility.readConfig(PROPERTIES, "master");
 		} catch (IOException e) {
 			System.out.println("File " + PROPERTIES + " not found");
 			e.printStackTrace();
 		}
 
 		// Now, we parse the string obtained by reading the .properties file
-		String[] masterAddrAndPort = master.split(":");
-		MASTER_ADDR = masterAddrAndPort[0];
-		MASTER_PORT = Integer.parseInt(masterAddrAndPort[1]);
+		String[] masterAddrAndPortArray = masterAddrAndPort.split(",");
+		MASTER_ADDR = masterAddrAndPortArray[0];
+		MASTER_PORT = Integer.parseInt(masterAddrAndPortArray[1]);
+
+		System.out.println(MASTER_ADDR + ":" + MASTER_PORT);
 
 		// Each node sends a registration string of this form: ip:port
 		// id will be assigned by Master
 		String registrationString = null;
 
-		// We open a socket towards the master, and we send our registration message
-		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
 
-			ObjectOutputStream os = new ObjectOutputStream(masterSocket.getOutputStream());
+		try {
+			ObjectOutputStream os = null;
 			ObjectInputStream is = null;
+			// We open a socket towards the master, and we send our registration message
+			masterSocket = new Socket(MASTER_ADDR, MASTER_PORT);
+
+			os = new ObjectOutputStream(masterSocket.getOutputStream());
 
 			registrationString = NODE_ADDR + ":" + NODE_PORT;
 
@@ -114,7 +138,6 @@ public class Node {
 			nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
 			System.out.println();
 		} catch (IOException | ClassNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -123,6 +146,10 @@ public class Node {
 
 		// total number of nodes
 		int N = nodes.size();
+
+		// allocate space for every queue
+		for(int i = 0; i < N; ++i)
+			msgQueue.add(new ConcurrentLinkedQueue<>());
 
 		try {
 			/****************************/
@@ -244,6 +271,9 @@ public class Node {
 
 			int M = 5;
 
+			// Send msg only if generated random value is bigger than 0,05
+			Random r = new Random(NODE_ID);
+
 			for (int n_messages = 0; n_messages < M; ++n_messages) {
 				// 1 thread send
 				for (int i = 0; i < sockets.size(); ++i) {
@@ -256,9 +286,19 @@ public class Node {
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
 							+ sockets.get(i).getInetAddress().getCanonicalHostName() + ":" + sockets.get(i).getPort());
 
-					// TODO send msg only if generated random value is bigger than 0,05
-					nodeOs.writeObject(msg);
-					nodeOs.flush();
+					
+					float val = r.nextFloat();
+					// System.out.println("\t\tval: " + val);
+
+					if (val >= this.LP) {
+						nodeOs.writeObject(msg);
+						nodeOs.flush();
+					}
+
+					else {
+						System.out.println("Message lost");
+					}
+
 				}
 
 				++MSG_ID;
@@ -284,11 +324,21 @@ public class Node {
 
 									System.out.println("**Received message: " + msg.getMessageID() + " from node "
 											+ msg.getSenderID());
+									
+									// msgQueue.get(msg.getSenderID()).add(msg);
+									
+									// if(msgQueue.get(msg.getSenderID()).size() == M) {
+									// 	// receivingSocket.close();
+									// 	System.out.println("Communication between " + NODE_ID + " and " + msg.getSenderID() + " ended");
+									
+									// 	s.close();
+									// }
 
 									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
 									// Thread.sleep(1000);
 								}
-							} catch (Exception e) {
+							} catch (ClassNotFoundException | IOException e) {
+								System.out.println("Internal catch");
 								e.printStackTrace();
 								System.exit(0);
 							}
@@ -298,10 +348,21 @@ public class Node {
 				}).start();
 			}
 
+		
 		} catch (Exception e) {
+			System.out.println("External catch");
 			e.printStackTrace();
 		}
 
+		// try {
+		// 	// TODO: send statistical result to master
+		// 	// Object stats = new Object();
+		// 	// os.writeObject(stats);
+
+		// 	masterSocket.close();
+		// } catch (IOException e) {
+		// 	e.printStackTrace();
+		// }
 	}
 
 	public void close() {
@@ -316,7 +377,6 @@ public class Node {
 	public Map<Integer, String> getNodes() {
 		return nodes;
 	}
-
 
 	public static void main(final String[] args) throws IOException {
 		if (args.length != 2) {

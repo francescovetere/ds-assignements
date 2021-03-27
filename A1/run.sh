@@ -10,7 +10,7 @@ fi
 N=$1
 
 # Each node has a port number which start from 4000 and go up incrementally
-basePort=4000; 
+basePort=4000;
 
 # Start Master
 MASTER_PATH="java -classpath bin it.unipr.ds.A1.Master localhost 9000;"

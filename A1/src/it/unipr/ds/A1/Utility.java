@@ -41,7 +41,7 @@ public class Utility {
 	 * @return a String, containing master_addr and master_port separated by ":"
 	 * @throws IOException
 	 */
-	public static String readConfig(final String properties) throws IOException {
+	public static String readConfig(final String properties, final String property) throws IOException {
 		// Create a reader object on the properties file
 		FileReader reader = new FileReader(properties);
 
@@ -52,20 +52,17 @@ public class Utility {
 		p.load(reader);
 
 		// Access properties data
-		String serversProperty = p.getProperty("master");
+		String serversProperty = p.getProperty(property);
 
-		// Split over ";"
-		String[] serversAndPorts = serversProperty.split(",");
-
-		String address = serversAndPorts[0];
-		int port = Integer.parseInt(serversAndPorts[1].trim());
-
-		return address + ":" + port;
+		return serversProperty;
 	}
 	
 	
 	/**
-	 * Method that writes on the .properties file an (address, port) pair 
+	 * Method that writes on the .properties file all the necessary parameters for the system:
+	 * master=address,port
+	 * LP=0.05
+	 * M=100
 	 * Used to initialize the config file after Master node starting
 	 * 
 	 * @param properties String that identifies the properties file
@@ -78,6 +75,9 @@ public class Utility {
 		try (OutputStream output = new FileOutputStream(properties)) {
 			Properties p = new Properties();
 			p.setProperty("master", address + "," + port);
+			p.setProperty("LP", "0.05f");
+			p.setProperty("M", "100"); // TODO: all possible values for M
+
 			p.store(output, null);
 		} catch (IOException io) {
 			io.printStackTrace();
