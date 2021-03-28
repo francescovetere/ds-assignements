@@ -1,16 +1,19 @@
 package it.unipr.ds.A1;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Random;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -47,7 +50,7 @@ public class Node {
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
-	private List<Queue<Message>> msgQueue = new ArrayList<>();
+	private List<Deque<Message>> msgQueue = new ArrayList<>();
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
@@ -151,7 +154,7 @@ public class Node {
 
 		// allocate space for every queue
 		for (int i = 0; i < N; ++i)
-			msgQueue.add(new ConcurrentLinkedQueue<>());
+			msgQueue.add(new ConcurrentLinkedDeque<>());
 
 		try {
 			/****************************/
@@ -235,6 +238,7 @@ public class Node {
 
 								System.out.println("**Received setup message: " + msg.getMessageID() + " from node "
 										+ msg.getSenderID());
+
 							}
 
 						} catch (Exception e) {
@@ -342,25 +346,47 @@ public class Node {
 				Socket s = sockets.get(i);
 				// this.pool.execute(new NodeThread(this, s));
 				Thread t = new Thread(new Runnable() {
+					ObjectOutputStream os = null;
+					ObjectInputStream is = null;
 
 					@Override
 					public void run() {
 						while (true) {
-							ObjectInputStream is = null;
 
 							try {
 								is = new ObjectInputStream(s.getInputStream());
 
 								Object obj = is.readObject();
-
 								if (obj instanceof Message) {
 									++numReceived;
 
 									Message msg = (Message) obj;
 
-									// msgQueue.get(msg.getSenderID()).add(msg); // TODO: handling msg queue
+									if(msg.getMessageID() > 0) {
+										int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast().getMessageID();
+										int expectedMsgId = (msg.getMessageID() - 1);
+										int senderExpectedMsg = (msg.getSenderID());
 
-									// System.out.println(msg.getBody());
+										if(lastMsgIdReceived != expectedMsgId) {
+											System.out.println("Msg with id " + expectedMsgId + 
+											" from node " + senderExpectedMsg +  " never arrived!");
+											
+											// Request message to ask which message resend
+											//Message reqMsg = new Message(senderExpectedMsg, expectedMsgId);
+
+											// Or maybe I can send just the ID of the message 
+											// which must be sent back? I this case, *expectedMsgId*
+											// if(os == null) {
+											// 	os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
+											// }
+
+											// os.writeObject(expectedMsgId);
+											// os.flush();
+										}
+										
+									}
+									
+									msgQueue.get(msg.getSenderID()).add(msg); // TODO: handling msg queue
 
 									if (msg.getBody().equals("end")) {
 										// receivingSocket.close();
@@ -373,6 +399,10 @@ public class Node {
 									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
 									// Thread.sleep(1000);
 								}
+								// else   {
+								// 	Integer id = (Integer) obj;
+								// 	System.out.println("Received request to resend message " + id + " from " + s);
+								// }
 							} catch (Exception e) {
 								break;
 							}
@@ -396,6 +426,8 @@ public class Node {
 		}
 
 		System.out.println("\n\tMulticast exchange terminated correctly\n");
+
+		// System.out.println("\n\nMessage queue list: " + msgQueue);
 
 		// Now, we open a socket towards the master, and we send our statistics data
 		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
