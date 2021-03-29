@@ -16,6 +16,8 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import javax.swing.plaf.nimbus.NimbusLookAndFeel;
+
 /**
  * Class that defines a generic peer (node) in the system, which can both send
  * and receive messages
@@ -32,7 +34,7 @@ public class Node {
 	private static String NODE_ADDR;
 	private static int NODE_PORT;
 
-	private static int MSG_ID;
+	private static int MSG_ID = 0;
 
 	private static final String PROPERTIES = "config.properties";
 	// Probability of error
@@ -110,23 +112,23 @@ public class Node {
 		// id will be assigned by Master
 		String registrationString = null;
 
-		ObjectOutputStream os = null;
-		ObjectInputStream is = null;
+		ObjectOutputStream masterOs = null;
+		ObjectInputStream masterIs = null;
 
 		// We open a socket towards the master, and we send our registration message
 		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
-			os = new ObjectOutputStream(masterSocket.getOutputStream());
+			masterOs = new ObjectOutputStream(masterSocket.getOutputStream());
 
 			registrationString = NODE_ADDR + ":" + NODE_PORT;
 			System.out.println("Node sends: " + registrationString + " to master");
 
-			os.writeObject(registrationString);
-			os.flush();
+			masterOs.writeObject(registrationString);
+			masterOs.flush();
 
-			is = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
+			masterIs = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
 
 			System.out.println("Waiting for start message from master");
-			Object o = is.readObject();
+			Object o = masterIs.readObject();
 
 			// We expect to receive a Map<Integer, String> (i.e.: id --> <ip, port>)
 			// If we receive something else, we terminate our execution
@@ -203,12 +205,8 @@ public class Node {
 						+ createdSockets.get(i).getInetAddress().getCanonicalHostName() + ":"
 						+ createdSockets.get(i).getPort());
 
-				long startTime = System.nanoTime();
 				nodeOs.writeObject(msg);
 				nodeOs.flush();
-				long elapsedTime = (System.nanoTime() - startTime);
-
-				this.totTime += elapsedTime * Math.pow(10, -6); // nanosecond --> milliseconds
 			}
 
 			// The remaining NODE_ID sockets, will be received from other nodes
@@ -345,56 +343,74 @@ public class Node {
 			for (int i = 0; i < sockets.size(); ++i) {
 				Socket s = sockets.get(i);
 				// this.pool.execute(new NodeThread(this, s));
-				Thread t = new Thread(new Runnable() {
-					ObjectOutputStream os = null;
-					ObjectInputStream is = null;
 
+				Thread t = new Thread(new Runnable() {
 					@Override
 					public void run() {
-						while (true) {
+						ObjectOutputStream os = null;
 
+						while (true) {
 							try {
-								is = new ObjectInputStream(s.getInputStream());
+								ObjectInputStream is = new ObjectInputStream(s.getInputStream());
 
 								Object obj = is.readObject();
+
 								if (obj instanceof Message) {
 									++numReceived;
 
 									Message msg = (Message) obj;
+									
+									System.out.println(msg.getBody());
 
-									if(msg.getMessageID() > 0) {
+									if (msg.getMessageID() > 0) {
 										int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast().getMessageID();
 										int expectedMsgId = (msg.getMessageID() - 1);
 										int senderExpectedMsg = (msg.getSenderID());
 
-										if(lastMsgIdReceived != expectedMsgId) {
-											System.out.println("Msg with id " + expectedMsgId + 
-											" from node " + senderExpectedMsg +  " never arrived!");
-											
-											// Request message to ask which message resend
-											//Message reqMsg = new Message(senderExpectedMsg, expectedMsgId);
+										if (lastMsgIdReceived != expectedMsgId) {
 
-											// Or maybe I can send just the ID of the message 
-											// which must be sent back? I this case, *expectedMsgId*
-											// if(os == null) {
-											// 	os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
-											// }
+											try {
+												// Socket tmp = sockets.get(0);
+												
+												if(os == null)
+													os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
 
-											// os.writeObject(expectedMsgId);
-											// os.flush();
+												System.out.println("Msg with id " + expectedMsgId + " from node "
+														+ senderExpectedMsg + " never arrived!");
+
+												// Request message to ask which message resend
+												Message reqMsg = new Message(senderExpectedMsg, expectedMsgId, "lost");
+												// System.out.println(reqMsg.getBody());
+
+												// Or maybe I can send just the ID of the message 
+												// which must be sent back? I this case, *expectedMsgId*
+												os.writeObject(reqMsg);
+												os.flush();
+
+											} catch (IOException e) {
+												e.printStackTrace();
+											}
+
 										}
-										
-									}
-									
-									msgQueue.get(msg.getSenderID()).add(msg); // TODO: handling msg queue
-
-									if (msg.getBody().equals("end")) {
-										// receivingSocket.close();
-										s.close();
 									}
 
-									System.out.println("**Received message: " + msg.getMessageID() + " from node "
-											+ msg.getSenderID());
+									msgQueue.get(msg.getSenderID()).add(msg);
+
+									if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
+										System.out.println("**Received termination message: " + msg.getMessageID()
+												+ " from node " + msg.getSenderID());
+										// s.close();
+									}
+
+									else if (msg.getBody().equals("lost")) { // TODO: Not working properly...
+										System.out.println("**Received request to resend message " + msg.getMessageID()
+												+ " from node " + msg.getSenderID());
+									}
+
+									else {
+										System.out.println("**Received message: " + msg.getMessageID() + " from node "
+												+ msg.getSenderID());
+									}
 
 									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
 									// Thread.sleep(1000);
@@ -431,7 +447,7 @@ public class Node {
 
 		// Now, we open a socket towards the master, and we send our statistics data
 		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
-			os = new ObjectOutputStream(masterSocket.getOutputStream());
+			masterOs = new ObjectOutputStream(masterSocket.getOutputStream());
 
 			Statistics statistics = new Statistics();
 			statistics.nodeID = NODE_ID;
@@ -445,10 +461,10 @@ public class Node {
 			System.out.println("Node sends its statistics to master, and terminate its execution");
 			System.out.println(statistics);
 
-			os.writeObject(statistics);
-			os.flush();
+			masterOs.writeObject(statistics);
+			masterOs.flush();
 
-			os.close();
+			masterOs.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
