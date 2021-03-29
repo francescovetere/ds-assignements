@@ -298,8 +298,6 @@ public class Node {
 					ObjectOutputStream nodeOs = new ObjectOutputStream(sockets.get(i).getOutputStream());
 
 					// We send a Message object
-					// TODO implement a "better" message id generation (incremental)
-
 					Message msg = new Message(NODE_ID, MSG_ID);
 
 					// If this is the last iteration, we send to every Node the termination message
@@ -339,19 +337,19 @@ public class Node {
 
 			// N-1 threads receive
 			List<Thread> receivingThreads = new ArrayList<>();
+			List<Message> lostMessages = new ArrayList<>();
 
 			for (int i = 0; i < sockets.size(); ++i) {
 				Socket s = sockets.get(i);
-				// this.pool.execute(new NodeThread(this, s));
 
 				Thread t = new Thread(new Runnable() {
 					@Override
 					public void run() {
-						ObjectOutputStream os = null;
+						ObjectInputStream is = null;
 
 						while (true) {
 							try {
-								ObjectInputStream is = new ObjectInputStream(s.getInputStream());
+								is = new ObjectInputStream(s.getInputStream());
 
 								Object obj = is.readObject();
 
@@ -359,19 +357,22 @@ public class Node {
 									++numReceived;
 
 									Message msg = (Message) obj;
-									
-									System.out.println(msg.getBody());
+							
+									// L'errore era qui: quando arrivava un messaggio di tipo "lost",
+									// entrava comunque nell'if ma al momento dell'assegnamento di *lastMsgIdReceived*
+									// generava un'eccezione
+									Boolean lostMsg = msg.getBody().equals("lost");
+									Boolean resentMsg = msg.getBody().equals("resent");
 
-									if (msg.getMessageID() > 0) {
+									if ( (msg.getMessageID() > 0) & (lostMsg==false) & (resentMsg==false) ) {
 										int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast().getMessageID();
 										int expectedMsgId = (msg.getMessageID() - 1);
 										int senderExpectedMsg = (msg.getSenderID());
 
 										if (lastMsgIdReceived != expectedMsgId) {
-
 											try {
-												// Socket tmp = sockets.get(0);
-												
+												ObjectOutputStream os = null;
+
 												if(os == null)
 													os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
 
@@ -380,13 +381,9 @@ public class Node {
 
 												// Request message to ask which message resend
 												Message reqMsg = new Message(senderExpectedMsg, expectedMsgId, "lost");
-												// System.out.println(reqMsg.getBody());
 
-												// Or maybe I can send just the ID of the message 
-												// which must be sent back? I this case, *expectedMsgId*
 												os.writeObject(reqMsg);
 												os.flush();
-
 											} catch (IOException e) {
 												e.printStackTrace();
 											}
@@ -395,31 +392,42 @@ public class Node {
 									}
 
 									msgQueue.get(msg.getSenderID()).add(msg);
+									
+									if (msg.getBody().equals("lost")) { // TODO: Not working properly...
+										System.out.println("\n\t\t ************ \n" + 
+										"Received request to resend message: \n" + msg 
+										+ "via socket " + s 
+										+ "\n\t\t ************ \n");
 
-									if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
+										//Immediately resend requested message
+										ObjectOutputStream os = null;
+										if(os == null) 
+											os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
+
+										msg.setBody("resent");
+										
+										os.writeObject(msg);
+										os.flush();
+									}
+									else if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
 										System.out.println("**Received termination message: " + msg.getMessageID()
 												+ " from node " + msg.getSenderID());
+
 										// s.close();
 									}
-
-									else if (msg.getBody().equals("lost")) { // TODO: Not working properly...
-										System.out.println("**Received request to resend message " + msg.getMessageID()
-												+ " from node " + msg.getSenderID());
+									else if (msg.getBody().equals("resent")) { // TODO: Not working properly... (?)
+										System.out.println("**Received resent message: \n" + msg);
 									}
-
 									else {
 										System.out.println("**Received message: " + msg.getMessageID() + " from node "
 												+ msg.getSenderID());
 									}
 
 									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
-									// Thread.sleep(1000);
+									// Thread.sleep(200);
 								}
-								// else   {
-								// 	Integer id = (Integer) obj;
-								// 	System.out.println("Received request to resend message " + id + " from " + s);
-								// }
 							} catch (Exception e) {
+								e.printStackTrace();
 								break;
 							}
 						}

@@ -45,4 +45,9 @@ public final class Message implements Serializable {
 	public void setBody(String body) {
 		this.body = body;
 	}
+
+	public String toString() {
+		return "--Message-- \n" + "MessageID: " + messageID + "\n" 
+		+ "SenderID: " + senderID + "\n" + "Body: " + body + "\n";
+	}
 }
