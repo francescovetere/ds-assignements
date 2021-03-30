@@ -76,7 +76,7 @@ public class Utility {
 			Properties p = new Properties();
 			p.setProperty("master", address + "," + port);
 			p.setProperty("LP", "0.05f");
-			p.setProperty("M", "100"); // TODO: all possible values for M
+			p.setProperty("M", "10"); // TODO: all possible values for M
 
 			p.store(output, null);
 		} catch (IOException io) {

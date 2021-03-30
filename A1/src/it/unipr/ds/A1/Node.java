@@ -11,12 +11,9 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import javax.swing.plaf.nimbus.NimbusLookAndFeel;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class that defines a generic peer (node) in the system, which can both send
@@ -49,6 +46,10 @@ public class Node {
 	private int numResent = 0;
 	private int numReceived = 0;
 	private int numLost = 0;
+
+	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
+	private int numMissing = 0;
+	private int numEnded = 0;
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
@@ -166,7 +167,7 @@ public class Node {
 			 * Node i must activate N-i-1 connections. In this way, we avoid creating N^2
 			 * connections, because we exploit the fact that TCP connections are
 			 * bidirectional
-			 * 
+			 *
 			 * In the end, we want for each node N sockets N - NODE_ID - 1 will be created
 			 * from the Node itself. The other NODE_ID sockets will be created from other
 			 * Nodes, and this current Node will save them when it receives the first
@@ -337,7 +338,7 @@ public class Node {
 
 			// N-1 threads receive
 			List<Thread> receivingThreads = new ArrayList<>();
-			List<Message> lostMessages = new ArrayList<>();
+			// List<Message> lostMessages = new ArrayList<>();
 
 			for (int i = 0; i < sockets.size(); ++i) {
 				Socket s = sockets.get(i);
@@ -348,83 +349,125 @@ public class Node {
 						ObjectInputStream is = null;
 
 						while (true) {
+							System.out.println("===" + " numMissing: " + numMissing + " numResent: " + numResent
+									+ " numLost: " + numLost + " numEnded: " + numEnded + " ===");
+
+							// Se non mi manca alcun messaggio da ricevere dagli altri nodi
+							// E se ho inviato reinviato agli altri nodi tutti i messaggi che avevo inzialmente perso
+							// E se ho ricevuto N - 1 messaggi di end
+							// ===> allora posso uscire dal while
+							if (numMissing == 0 && numResent == numLost && numEnded == N - 1) {
+								System.out.println("*** Per me si può chiudere ***");
+								// try {
+								// 	s.close();
+								// } catch (Exception e) {
+								// 	e.printStackTrace();
+								// }
+								break;
+							}
+
 							try {
 								is = new ObjectInputStream(s.getInputStream());
 
 								Object obj = is.readObject();
 
 								if (obj instanceof Message) {
-									++numReceived;
-
 									Message msg = (Message) obj;
-							
+
 									// L'errore era qui: quando arrivava un messaggio di tipo "lost",
 									// entrava comunque nell'if ma al momento dell'assegnamento di *lastMsgIdReceived*
 									// generava un'eccezione
-									Boolean lostMsg = msg.getBody().equals("lost");
-									Boolean resentMsg = msg.getBody().equals("resent");
 
-									if ( (msg.getMessageID() > 0) & (lostMsg==false) & (resentMsg==false) ) {
-										int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast().getMessageID();
-										int expectedMsgId = (msg.getMessageID() - 1);
-										int senderExpectedMsg = (msg.getSenderID());
+									// Check if the received message (except the first)is correct according to the last message in the queue
+									if (msg.getMessageID() > 0) {
+										if (!msg.getBody().equals("lost") && !msg.getBody().equals("resent")) {
+											int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast()
+													.getMessageID();
+											int expectedMsgId = (msg.getMessageID() - 1);
+											int senderExpectedMsg = (msg.getSenderID());
 
-										if (lastMsgIdReceived != expectedMsgId) {
-											try {
-												ObjectOutputStream os = null;
+											if (lastMsgIdReceived != expectedMsgId) {
+												// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
+												synchronized (this) {
+													++numMissing;
+												}
 
-												if(os == null)
-													os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
+												try {
+													ObjectOutputStream os = null;
 
-												System.out.println("Msg with id " + expectedMsgId + " from node "
-														+ senderExpectedMsg + " never arrived!");
+													if (os == null)
+														os = new ObjectOutputStream(
+																new BufferedOutputStream(s.getOutputStream()));
 
-												// Request message to ask which message resend
-												Message reqMsg = new Message(senderExpectedMsg, expectedMsgId, "lost");
+													// System.out.println("Msg with id " + expectedMsgId + " from node "
+													// 		+ senderExpectedMsg + " never arrived!");
 
-												os.writeObject(reqMsg);
-												os.flush();
-											} catch (IOException e) {
-												e.printStackTrace();
+													// Request message to ask which message resend
+													Message reqMsg = new Message(senderExpectedMsg, expectedMsgId,
+															"lost");
+
+													System.out.println(
+															"*Send request for lost message: " + reqMsg.getMessageID()
+																	+ " to node " + reqMsg.getSenderID());
+
+													os.writeObject(reqMsg);
+													os.flush();
+												} catch (IOException e) {
+													e.printStackTrace();
+												}
+
 											}
-
 										}
 									}
 
 									msgQueue.get(msg.getSenderID()).add(msg);
-									
-									if (msg.getBody().equals("lost")) { // TODO: Not working properly...
-										System.out.println("\n\t\t ************ \n" + 
-										"Received request to resend message: \n" + msg 
-										+ "via socket " + s 
-										+ "\n\t\t ************ \n");
 
-										//Immediately resend requested message
-										ObjectOutputStream os = null;
-										if(os == null) 
-											os = new ObjectOutputStream(new BufferedOutputStream(s.getOutputStream()));
+									if (msg.getBody().equals("lost")) { // TODO: Not working properly...
+										System.out.println("**Received request to resend message: " + msg.getMessageID()
+												+ " from node " + msg.getSenderID()
+												+ "\n*Send previously lost message: " + msg.getMessageID() + " to node "
+												+ msg.getSenderID());
+
+										// Immediately resend requested message
+										// Invio un messaggio che non era arrivato ad un nodo, quindi incremento i messaggi reinviati
+										synchronized (this) {
+											++numResent;
+										}
+
+										ObjectOutputStream os = new ObjectOutputStream(
+												new BufferedOutputStream(s.getOutputStream()));
 
 										msg.setBody("resent");
-										
+
 										os.writeObject(msg);
 										os.flush();
-									}
-									else if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
+
+									} else if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
 										System.out.println("**Received termination message: " + msg.getMessageID()
 												+ " from node " + msg.getSenderID());
+										// Ricevo un messaggio di end, quindi incremento il numero di nodi che mi hanno segnalato di aver finito
+										synchronized (this) {
+											++numReceived;
+											++numEnded;
+										}
 
-										// s.close();
-									}
-									else if (msg.getBody().equals("resent")) { // TODO: Not working properly... (?)
-										System.out.println("**Received resent message: \n" + msg);
-									}
-									else {
+									} else if (msg.getBody().equals("resent")) { // TODO: Not working properly... (?)
+										// Ricevo un messaggio che non mi era arrivato, quindi decremento i messaggi mancanti
+										synchronized (this) {
+											--numMissing;
+										}
+
+										System.out.println("**Received previously lost message: " + msg.getMessageID()
+												+ " from node " + msg.getSenderID());
+
+									} else {
+										synchronized (this) {
+											++numReceived;
+										}
+
 										System.out.println("**Received message: " + msg.getMessageID() + " from node "
 												+ msg.getSenderID());
 									}
-
-									// La sleep si può mettere per vedere meglio l'esecuzione, ma non è necessaria
-									// Thread.sleep(200);
 								}
 							} catch (Exception e) {
 								e.printStackTrace();
@@ -443,6 +486,7 @@ public class Node {
 			for (int i = 0; i < receivingThreads.size(); ++i)
 				receivingThreads.get(i).join();
 
+			System.out.println("Here");
 			this.avgTime = this.totTime / this.numSent;
 
 		} catch (Exception e) {

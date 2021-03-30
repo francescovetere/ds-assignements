@@ -46,8 +46,15 @@ public final class Message implements Serializable {
 		this.body = body;
 	}
 
+	@Override
 	public String toString() {
-		return "--Message-- \n" + "MessageID: " + messageID + "\n" 
-		+ "SenderID: " + senderID + "\n" + "Body: " + body + "\n";
+		return "--Message-- \n" + "MessageID: " + messageID + "\n" + "SenderID: " + senderID + "\n" + "Body: " + body
+				+ "\n";
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		Message msg = (Message) obj;
+		return this.senderID == msg.senderID && this.messageID == msg.messageID && this.body.equals(msg.body);
 	}
 }
