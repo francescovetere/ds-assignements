@@ -3,16 +3,20 @@ package it.unipr.ds.A1;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectInputFilter;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.net.Socket;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Map.Entry;
+import java.util.Properties;
 
 /*
  * Class containing helpful static methods used across other classes
  */
 public class Utility {
-	
+
 	/**
 	 * Method that reads a map and a value, and return the first key in the map 
 	 * that corresponds to that value
@@ -30,8 +34,7 @@ public class Utility {
 		}
 		return null;
 	}
-	
-	
+
 	/**
 	 * Method that reads and parses a .properties file, containing the address and
 	 * the port of the master node 
@@ -56,8 +59,7 @@ public class Utility {
 
 		return serversProperty;
 	}
-	
-	
+
 	/**
 	 * Method that writes on the .properties file all the necessary parameters for the system:
 	 * master=address,port
@@ -83,6 +85,41 @@ public class Utility {
 			io.printStackTrace();
 		}
 
+	}
+
+	/**
+	* Method that sends a Message m over a socket s
+	* @param s The socket over which m will be sent
+	* @param m The message to be sent
+	*/
+	public static void send(Socket s, Message m) {
+		ObjectOutputStream os = null;
+		try {
+			os = new ObjectOutputStream(s.getOutputStream());
+			os.writeObject(m);
+			os.flush();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	* Method that receives and returns an Object obj over a Socket s
+	* @param s The socket over which m will be received
+	* @return obj The object to be received
+	*/
+	public static Object receive(Socket s) {
+		ObjectInputStream is = null;
+		Object obj = null;
+
+		try {
+			is = new ObjectInputStream(s.getInputStream());
+			obj = is.readObject();
+		} catch (IOException | ClassNotFoundException e) {
+			e.printStackTrace();
+		}
+
+		return obj;
 	}
 
 }
