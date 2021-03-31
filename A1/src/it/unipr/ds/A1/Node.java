@@ -15,6 +15,8 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.lang.model.util.ElementScanner14;
+
 /**
  * Class that defines a generic peer (node) in the system, which can both send
  * and receive messages
@@ -50,6 +52,8 @@ public class Node {
 	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
 	private int numMissing = 0;
 	private int numEnded = 0;
+	private AtomicInteger numTot = new AtomicInteger();
+	//private int numTot = 0;
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
@@ -307,8 +311,8 @@ public class Node {
 
 					float randomVal = r.nextFloat();
 					// System.out.println("\t\tval: " + val);
-
-					if (randomVal >= this.LP) {
+					// | msg.getBody().equals("end")
+					if (randomVal >= this.LP | msg.getBody().equals("end")) {
 						++numSent;
 
 						System.out.println("*Send message: " + msg.getMessageID() + " on socket "
@@ -352,24 +356,11 @@ public class Node {
 							System.out.println("===" + " numMissing: " + numMissing + " numResent: " + numResent
 									+ " numLost: " + numLost + " numEnded: " + numEnded + " ===");
 
-							// Se non mi manca alcun messaggio da ricevere dagli altri nodi
-							// E se ho inviato reinviato agli altri nodi tutti i messaggi che avevo inzialmente perso
-							// E se ho ricevuto N - 1 messaggi di end
-							// ===> allora posso uscire dal while
-							if (numMissing == 0 && numResent == numLost && numEnded == N - 1) {
-								System.out.println("*** Per me si può chiudere ***");
-								// try {
-								// 	s.close();
-								// } catch (Exception e) {
-								// 	e.printStackTrace();
-								// }
-								break;
-							}
-
 							try {
 								is = new ObjectInputStream(s.getInputStream());
 
 								Object obj = is.readObject();
+
 
 								if (obj instanceof Message) {
 									Message msg = (Message) obj;
@@ -379,19 +370,68 @@ public class Node {
 									// generava un'eccezione
 
 									// Check if the received message (except the first)is correct according to the last message in the queue
-									if (msg.getMessageID() > 0) {
+									if (!msgQueue.get(msg.getSenderID()).isEmpty()) {
 										if (!msg.getBody().equals("lost") && !msg.getBody().equals("resent")) {
+											
 											int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast()
-													.getMessageID();
-											int expectedMsgId = (msg.getMessageID() - 1);
+												.getMessageID();
+											int expectedMsgId = lastMsgIdReceived + 1;
 											int senderExpectedMsg = (msg.getSenderID());
+											
 
-											if (lastMsgIdReceived != expectedMsgId) {
-												// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
-												synchronized (this) {
-													++numMissing;
+											// System.out.println("**********************************");
+											// System.out.println("lastIDreceived: " + lastMsgIdReceived);
+											// System.out.println("expectedIDreceived: " + expectedMsgId);
+											// System.out.println("currentIDreceived: " + msg.getMessageID());
+											// System.out.println("**********************************");
+
+											if (msg.getMessageID() != expectedMsgId) {
+												int diff = msg.getMessageID() - expectedMsgId;
+
+												for(int i = diff; i >= 1; i--) {
+													try {
+														ObjectOutputStream os = null;
+
+														if (os == null)
+															os = new ObjectOutputStream(
+																	new BufferedOutputStream(s.getOutputStream()));
+
+														// System.out.println("Msg with id " + expectedMsgId + " from node "
+														// 		+ senderExpectedMsg + " never arrived!");
+
+														// Request message to ask which message resend
+														Message reqMsg = new Message(senderExpectedMsg, msg.getMessageID() - diff,
+																"lost");
+
+														System.out.println(
+																"*Send request for lost message: " + reqMsg.getMessageID()
+																+ " via " + s);		
+																// + " to node " + reqMsg.getSenderID());
+
+														os.writeObject(reqMsg);
+														os.flush();
+													} catch (IOException e) {
+														e.printStackTrace();
+													}
+
+													// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
+													synchronized (this) {
+														++numMissing;
+													}
+
 												}
 
+											}
+										}
+
+									}
+									//Handle the case if was arrived the first message but its ID isn't 0 
+									else if(msgQueue.get(msg.getSenderID()).isEmpty() & msg.getMessageID()!=0) {
+										if (!msg.getBody().equals("lost") && !msg.getBody().equals("resent")) {
+
+											int senderExpectedMsg = (msg.getSenderID());
+
+											for(int i=0; i<msg.getMessageID(); i++) {
 												try {
 													ObjectOutputStream os = null;
 
@@ -399,16 +439,14 @@ public class Node {
 														os = new ObjectOutputStream(
 																new BufferedOutputStream(s.getOutputStream()));
 
-													// System.out.println("Msg with id " + expectedMsgId + " from node "
-													// 		+ senderExpectedMsg + " never arrived!");
-
 													// Request message to ask which message resend
-													Message reqMsg = new Message(senderExpectedMsg, expectedMsgId,
+													Message reqMsg = new Message(senderExpectedMsg, i,
 															"lost");
 
 													System.out.println(
 															"*Send request for lost message: " + reqMsg.getMessageID()
-																	+ " to node " + reqMsg.getSenderID());
+															+ " via " + s);		
+															// + " to node " + reqMsg.getSenderID());
 
 													os.writeObject(reqMsg);
 													os.flush();
@@ -416,23 +454,30 @@ public class Node {
 													e.printStackTrace();
 												}
 
+												// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
+												synchronized (this) {
+													++numMissing;
+												}
 											}
 										}
 									}
-
+									
 									msgQueue.get(msg.getSenderID()).add(msg);
-
+									
+									
 									if (msg.getBody().equals("lost")) { // TODO: Not working properly...
-										System.out.println("**Received request to resend message: " + msg.getMessageID()
-												+ " from node " + msg.getSenderID()
-												+ "\n*Send previously lost message: " + msg.getMessageID() + " to node "
-												+ msg.getSenderID());
 
 										// Immediately resend requested message
 										// Invio un messaggio che non era arrivato ad un nodo, quindi incremento i messaggi reinviati
 										synchronized (this) {
 											++numResent;
 										}
+
+										System.out.println("**Received request to resend message: " + msg.getMessageID()
+										// + " from node " + msg.getSenderID()
+										+ " via " + s		
+										+ "\n*Send previously lost message: " + msg.getMessageID() + " to node "
+										+ msg.getSenderID());
 
 										ObjectOutputStream os = new ObjectOutputStream(
 												new BufferedOutputStream(s.getOutputStream()));
@@ -444,7 +489,9 @@ public class Node {
 
 									} else if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
 										System.out.println("**Received termination message: " + msg.getMessageID()
-												+ " from node " + msg.getSenderID());
+												// + " from node " + msg.getSenderID());
+												+ " via " + s);		
+
 										// Ricevo un messaggio di end, quindi incremento il numero di nodi che mi hanno segnalato di aver finito
 										synchronized (this) {
 											++numReceived;
@@ -458,7 +505,8 @@ public class Node {
 										}
 
 										System.out.println("**Received previously lost message: " + msg.getMessageID()
-												+ " from node " + msg.getSenderID());
+												// + " from node " + msg.getSenderID());
+												+ " via " + s);
 
 									} else {
 										synchronized (this) {
@@ -471,6 +519,21 @@ public class Node {
 								}
 							} catch (Exception e) {
 								e.printStackTrace();
+								break;
+							}
+
+							// Se non mi manca alcun messaggio da ricevere dagli altri nodi
+							// E se ho inviato reinviato agli altri nodi tutti i messaggi che avevo inzialmente perso
+							// E se ho ricevuto N - 1 messaggi di end
+							// ===> allora posso uscire dal while
+							if ((numMissing == 0) & (numResent == numLost) & (numEnded == N - 1)) {
+								System.out.println("*** Per me si può chiudere ***");
+								// try {
+								// 	s.close();
+								// } catch (Exception e) {
+								// 	e.printStackTrace();
+								// }
+
 								break;
 							}
 						}
