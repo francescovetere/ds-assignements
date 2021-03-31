@@ -1,7 +1,6 @@
 package it.unipr.ds.A1;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -13,16 +12,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Class that defines a generic peer (node) in the system, which can both send
  * and receive messages
  */
 public class Node {
-	// private static final int COREPOOL = 5;
-	// private static final int MAXPOOL = 100;
-	// private static final long IDLETIME = 5000;
-	// private ThreadPoolExecutor pool;
+	private static final int COREPOOL = 5;
+	private static final int MAXPOOL = 100;
+	private static final long IDLETIME = 5000;
+
+	private ThreadPoolExecutor pool;
 
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
@@ -42,40 +45,49 @@ public class Node {
 	private float LP;
 
 	// Number of messages
-	private int M;
+	public int M;
 
 	// Number of nodes
-	private int N;
+	public int N;
 
 	// List of sockets to communicate with other N - 1 nodes
-	List<Socket> sockets;
-
-	// Statistics variables
-	private double totTime = 0;
-	private double avgTime = 0;
-	private int numSent = 0;
-	private int numResent = 0;
-	private int numReceived = 0;
-	private int numLost = 0;
-
-	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
-	private int numMissing = 0;
-	private int numEnded = 0;
-
-	// The queue of received messages
-	// (shared by the main thread and the N-1 storing threads)
-	private List<Deque<Message>> msgQueue = new ArrayList<>();
+	private List<Socket> sockets;
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
 	private Map<Integer, String> nodes;
 
+	// The socket from which this Node will be receiving messages from other Nodes
+	private ServerSocket receivingSocket;
+
+	// ****************** N.B. ******************
+	// Le seguenti variabili sono public solamente per comodità di accesso da NodeThreadMulticast
+	// Ovviamente, dovrebbero essere private e avere ciascuna la propria get e set...
+
+	// Inoltre, alcune le setto volatile per evitare possibili problemi di cache
+	// TODO: Devo ancora capire se ha dei veri vantaggi in questo caso o meno...
+
+	// Statistics variables
+	public volatile double totTime = 0;
+	public volatile double avgTime = 0;
+	public volatile int numSent = 0;
+	public volatile int numResent = 0;
+	public volatile int numReceived = 0;
+	public volatile int numLost = 0;
+
+	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
+	public volatile int numMissing = 0;
+	public volatile int numEnded = 0;
+
+	// The queue of received messages
+	// (shared by the main thread and the N-1 storing threads)
+	public List<Deque<Message>> msgQueue = new ArrayList<>();
+
 	public Node() throws IOException {
 		this.receivingSocket = new ServerSocket(NODE_PORT);
 
-		// this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME,
-		// TimeUnit.MILLISECONDS,
-		// new LinkedBlockingQueue<Runnable>());
+		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
+				new LinkedBlockingQueue<Runnable>());
 
 		String LP = null;
 		String M = null;
@@ -109,9 +121,6 @@ public class Node {
 		MASTER_PORT = Integer.parseInt(masterAddrAndPortArray[1]);
 	}
 
-	// The socket from which this Node will be receiving messages from other Nodes
-	private ServerSocket receivingSocket;
-
 	public void start() {
 		System.out.println("Node running (" + NODE_ADDR + ":" + NODE_PORT + ")");
 
@@ -134,58 +143,44 @@ public class Node {
 		for (int i = 0; i < N; ++i)
 			msgQueue.add(new ConcurrentLinkedDeque<>());
 
+		// We initialize the sockets with a "pyramidal" approach
+		this.sockets = socketsSetup();
+
+		System.out.println("\n---Total " + sockets.size() + " sockets---");
+		for (int i = 0; i < sockets.size(); ++i) {
+			System.out.println("\t<" + sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
+					+ sockets.get(i).getPort() + ">");
+		}
+
+		// At this point, we have our N - 1 sockets:
+		// we can begin our multicast protocol: 1 thread send M messages to all the
+		// sockets, the other N-1 threads receives messages from other
+		// we repeat the process M times
+		sendToAll();
+
+		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
+				new LinkedBlockingQueue<Runnable>());
+
+		receiveFromAll();
+
+		this.pool.shutdown();
+
+		// TODO: devo capire se serve o meno quest'ultima parte...
 		try {
-			// We initialize the sockets with a "pyramidal" approach
-			this.sockets = socketsSetup();
-
-			System.out.println("\n---Total " + sockets.size() + " sockets---");
-			for (int i = 0; i < sockets.size(); ++i) {
-				System.out.println("\t<" + sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
-						+ sockets.get(i).getPort() + ">");
-			}
-
-			// At this point, we have our N - 1 sockets:
-			// we can begin our multicast protocol: 1 thread send M messages to all the
-			// sockets, the other N-1 threads receives messages from other
-			// we repeat the process M times
-			sendToAll();
-
-			receiveFromAll();
-
-			System.out.println("Here");
-			this.avgTime = this.totTime / this.numSent;
-
-		} catch (Exception e) {
+			// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
+			this.pool.awaitTermination(1, TimeUnit.HOURS);
+		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+
+		this.avgTime = this.totTime / this.numSent;
 
 		System.out.println("\n\tMulticast exchange terminated correctly\n");
 
 		// System.out.println("\n\nMessage queue list: " + msgQueue);
 
-		// // Now, we open a socket towards the master, and we send our statistics data
-		// try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
-		// 	masterOs = new ObjectOutputStream(masterSocket.getOutputStream());
-
-		// 	Statistics statistics = new Statistics();
-		// 	statistics.nodeID = NODE_ID;
-		// 	statistics.totTime = this.totTime;
-		// 	statistics.avgTime = this.avgTime;
-		// 	statistics.numSent = this.numSent;
-		// 	statistics.numResent = this.numResent;
-		// 	statistics.numReceived = this.numReceived;
-		// 	statistics.numLost = this.numLost;
-
-		// 	System.out.println("Node sends its statistics to master, and terminate its execution");
-		// 	System.out.println(statistics);
-
-		// 	masterOs.writeObject(statistics);
-		// 	masterOs.flush();
-
-		// 	masterOs.close();
-		// } catch (IOException e) {
-		// 	e.printStackTrace();
-		// }
+		// Finally, we open a socket towards the master, and we send our statistics data
+		sendStatisticsToMaster();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -301,44 +296,22 @@ public class Node {
 	private List<Socket> receiveSockets() {
 		List<Socket> receivedSockets = new ArrayList<>();
 
-		// The threads that will manage the reception of the inital(setup) messages from
-		// other nodes
-		List<Thread> setupThreads = new ArrayList<>();
-
-		for (int i = 0; i < NODE_ID; ++i) {
-			Thread t = null;
-
-			try {
+		try {
+			for (int i = 0; i < NODE_ID; ++i) {
 				Socket s = receivingSocket.accept();
 				receivedSockets.add(s);
-
-				t = new Thread(new Runnable() {
-					@Override
-					public void run() {
-						Object obj = Utility.receive(s);
-
-						if (obj instanceof Message) {
-							Message msg = (Message) obj;
-
-							System.out.println("**Received setup message: " + msg.getMessageID() + " from node "
-									+ msg.getSenderID());
-
-						}
-
-					}
-				});
-			} catch (Exception e) {
-				e.printStackTrace();
+				pool.execute(new NodeThreadSetup(s));
 			}
-
-			t.start();
-			setupThreads.add(t);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 
-		// Wait for every receving thread to terminate
+		pool.shutdown();
+
+		// TODO: devo capire se serve o meno quest'ultima parte...
 		try {
-			for (int i = 0; i < setupThreads.size(); ++i)
-				setupThreads.get(i).join();
+			// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
+			pool.awaitTermination(1, TimeUnit.HOURS);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -364,8 +337,9 @@ public class Node {
 					msg.setBody("end");
 
 				float randomVal = r.nextFloat();
-				
+
 				if (randomVal >= this.LP || msg.getBody().equals("end")) {
+				// if (true) { // per il momento, ignoro possibili fallimenti
 					++numSent;
 
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
@@ -382,7 +356,7 @@ public class Node {
 					++numLost;
 
 					System.out.println("Message lost!");
-					Utility.send(sockets.get(i), null);
+					// Utility.send(sockets.get(i), null); //TODO: Forse si puo' anche non mettere?
 				}
 
 			}
@@ -396,211 +370,33 @@ public class Node {
 	* (N - 1 threads concurrently listening, one for each socket)
 	*/
 	private void receiveFromAll() {
-		List<Thread> receivingThreads = new ArrayList<>();
-		// List<Message> lostMessages = new ArrayList<>();
-
 		for (int i = 0; i < sockets.size(); ++i) {
 			Socket s = sockets.get(i);
-
-			Thread t = new Thread(new Runnable() {
-				@Override
-				public void run() {
-					ObjectInputStream is = null;
-
-					while (true) {
-						System.out.println("===" + " numMissing: " + numMissing + " numResent: " + numResent
-								+ " numLost: " + numLost + " numEnded: " + numEnded + " ===");
-
-						try {
-							is = new ObjectInputStream(s.getInputStream());
-
-							Object obj = is.readObject();
-
-							if (obj instanceof Message) {
-								Message msg = (Message) obj;
-
-								// L'errore era qui: quando arrivava un messaggio di tipo "lost",
-								// entrava comunque nell'if ma al momento dell'assegnamento di *lastMsgIdReceived*
-								// generava un'eccezione
-
-								// Check if the received message (except the first)is correct according to the last message in the queue
-								if (!msgQueue.get(msg.getSenderID()).isEmpty()) {
-									if (!msg.getBody().equals("lost") && !msg.getBody().equals("resent")) {
-
-										int lastMsgIdReceived = msgQueue.get(msg.getSenderID()).peekLast()
-												.getMessageID();
-										int expectedMsgId = lastMsgIdReceived + 1;
-										int senderExpectedMsg = (msg.getSenderID());
-
-										// System.out.println("**********************************");
-										// System.out.println("lastIDreceived: " + lastMsgIdReceived);
-										// System.out.println("expectedIDreceived: " + expectedMsgId);
-										// System.out.println("currentIDreceived: " + msg.getMessageID());
-										// System.out.println("**********************************");
-
-										if (msg.getMessageID() != expectedMsgId) {
-											int diff = msg.getMessageID() - expectedMsgId;
-
-											for (int i = diff; i >= 1; i--) {
-												try {
-													ObjectOutputStream os = null;
-
-													if (os == null)
-														os = new ObjectOutputStream(
-																new BufferedOutputStream(s.getOutputStream()));
-
-													// System.out.println("Msg with id " + expectedMsgId + " from node "
-													// 		+ senderExpectedMsg + " never arrived!");
-
-													// Request message to ask which message resend
-													Message reqMsg = new Message(senderExpectedMsg,
-															msg.getMessageID() - diff, "lost");
-
-													System.out.println("*Send request for lost message: "
-															+ reqMsg.getMessageID() + " via " + s);
-													// + " to node " + reqMsg.getSenderID());
-
-													os.writeObject(reqMsg);
-													os.flush();
-												} catch (IOException e) {
-													e.printStackTrace();
-												}
-
-												// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
-												synchronized (this) {
-													++numMissing;
-												}
-
-											}
-
-										}
-									}
-
-								}
-								//Handle the case if was arrived the first message but its ID isn't 0 
-								else if (msgQueue.get(msg.getSenderID()).isEmpty() & msg.getMessageID() != 0) {
-									if (!msg.getBody().equals("lost") && !msg.getBody().equals("resent")) {
-
-										int senderExpectedMsg = (msg.getSenderID());
-
-										for (int i = 0; i < msg.getMessageID(); i++) {
-											try {
-												ObjectOutputStream os = null;
-
-												if (os == null)
-													os = new ObjectOutputStream(
-															new BufferedOutputStream(s.getOutputStream()));
-
-												// Request message to ask which message resend
-												Message reqMsg = new Message(senderExpectedMsg, i, "lost");
-
-												System.out.println("*Send request for lost message: "
-														+ reqMsg.getMessageID() + " via " + s);
-												// + " to node " + reqMsg.getSenderID());
-
-												os.writeObject(reqMsg);
-												os.flush();
-											} catch (IOException e) {
-												e.printStackTrace();
-											}
-
-											// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
-											synchronized (this) {
-												++numMissing;
-											}
-										}
-									}
-								}
-
-								msgQueue.get(msg.getSenderID()).add(msg);
-
-								if (msg.getBody().equals("lost")) { // TODO: Not working properly...
-
-									// Immediately resend requested message
-									// Invio un messaggio che non era arrivato ad un nodo, quindi incremento i messaggi reinviati
-									synchronized (this) {
-										++numResent;
-									}
-
-									System.out.println("**Received request to resend message: " + msg.getMessageID()
-									// + " from node " + msg.getSenderID()
-											+ " via " + s + "\n*Send previously lost message: " + msg.getMessageID()
-											+ " to node " + msg.getSenderID());
-
-									ObjectOutputStream os = new ObjectOutputStream(
-											new BufferedOutputStream(s.getOutputStream()));
-
-									msg.setBody("resent");
-
-									os.writeObject(msg);
-									os.flush();
-
-								} else if (msg.getBody().equals("end")) { // TODO: Not working properly... (?)
-									System.out.println("**Received termination message: " + msg.getMessageID()
-									// + " from node " + msg.getSenderID());
-											+ " via " + s);
-
-									// Ricevo un messaggio di end, quindi incremento il numero di nodi che mi hanno segnalato di aver finito
-									synchronized (this) {
-										++numReceived;
-										++numEnded;
-									}
-
-								} else if (msg.getBody().equals("resent")) { // TODO: Not working properly... (?)
-									// Ricevo un messaggio che non mi era arrivato, quindi decremento i messaggi mancanti
-									synchronized (this) {
-										--numMissing;
-									}
-
-									System.out.println("**Received previously lost message: " + msg.getMessageID()
-									// + " from node " + msg.getSenderID());
-											+ " via " + s);
-
-								} else {
-									synchronized (this) {
-										++numReceived;
-									}
-
-									System.out.println("**Received message: " + msg.getMessageID() + " from node "
-											+ msg.getSenderID());
-								}
-							}
-						} catch (Exception e) {
-							e.printStackTrace();
-							break;
-						}
-
-						// Se non mi manca alcun messaggio da ricevere dagli altri nodi
-						// E se ho inviato reinviato agli altri nodi tutti i messaggi che avevo inzialmente perso
-						// E se ho ricevuto N - 1 messaggi di end
-						// ===> allora posso uscire dal while
-						if ((numMissing == 0) & (numResent == numLost) & (numEnded == N - 1)) {
-							System.out.println("*** Per me si può chiudere ***");
-							// try {
-							// 	s.close();
-							// } catch (Exception e) {
-							// 	e.printStackTrace();
-							// }
-
-							// break;
-						}
-					}
-				}
-
-			});
-
-			t.start();
-			receivingThreads.add(t);
+			this.pool.execute(new NodeThreadMulticast(this, s));
 		}
+	}
 
-		// Wait for every receving thread to terminate
-		try {
-			for (int i = 0; i < receivingThreads.size(); ++i)
-				receivingThreads.get(i).join();
-		} catch (InterruptedException e) {
+	/**
+	 * Method that send the final statistics to the master
+	 */
+	private void sendStatisticsToMaster() {
+		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
+			Statistics statistics = new Statistics();
+			statistics.nodeID = NODE_ID;
+			statistics.totTime = this.totTime;
+			statistics.avgTime = this.avgTime;
+			statistics.numSent = this.numSent;
+			statistics.numResent = this.numResent;
+			statistics.numReceived = this.numReceived;
+			statistics.numLost = this.numLost;
+
+			System.out.println("Node sends its statistics to master, and terminate its execution");
+			System.out.println(statistics);
+
+			Utility.send(masterSocket, statistics);
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
 	}
 
 	public Map<Integer, String> getNodes() {

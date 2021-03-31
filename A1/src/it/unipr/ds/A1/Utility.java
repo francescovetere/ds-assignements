@@ -3,7 +3,6 @@ package it.unipr.ds.A1;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.ObjectInputFilter;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
@@ -88,15 +87,33 @@ public class Utility {
 	}
 
 	/**
-	* Method that sends a Message m over a socket s
+	* Method that sends an Object obj over a socket s
 	* @param s The socket over which m will be sent
-	* @param m The message to be sent
+	* @param obj The object to be sent (instance of Message or Statistics)
 	*/
-	public static void send(Socket s, Message m) {
+	@SuppressWarnings("unchecked")
+	public static void send(Socket s, Object obj) {
 		ObjectOutputStream os = null;
 		try {
 			os = new ObjectOutputStream(s.getOutputStream());
-			os.writeObject(m);
+
+			if (obj instanceof Message) {
+				os.writeObject((Message) obj);
+			}
+
+			else if (obj instanceof Statistics) {
+				os.writeObject((Statistics) obj);
+			}
+
+			else if (obj instanceof Map<?, ?>) {
+				os.writeObject((Map<Integer, String>) obj);
+			}
+
+			else {
+				System.out.println("Sending of " + obj + " not supported");
+				System.exit(-1);
+			}
+			
 			os.flush();
 		} catch (IOException e) {
 			e.printStackTrace();
