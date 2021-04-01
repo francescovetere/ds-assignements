@@ -1,17 +1,14 @@
 package it.unipr.ds.A1;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -21,16 +18,16 @@ import java.util.concurrent.TimeUnit;
  * and receive messages
  */
 public class Node {
-	private static final int COREPOOL = 5;
+	private static final int COREPOOL = 100;
 	private static final int MAXPOOL = 100;
 	private static final long IDLETIME = 5000;
 
-	private ThreadPoolExecutor pool;
+	public ThreadPoolExecutor pool;
 
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
 
-	private static int NODE_ID;
+	public int NODE_ID;
 	private static String NODE_ADDR;
 	private static int NODE_PORT;
 
@@ -64,24 +61,21 @@ public class Node {
 	// Le seguenti variabili sono public solamente per comodità di accesso da NodeThreadMulticast
 	// Ovviamente, dovrebbero essere private e avere ciascuna la propria get e set...
 
-	// Inoltre, alcune le setto volatile per evitare possibili problemi di cache
-	// TODO: Devo ancora capire se ha dei veri vantaggi in questo caso o meno...
-
 	// Statistics variables
-	public volatile double totTime = 0;
-	public volatile double avgTime = 0;
-	public volatile int numSent = 0;
-	public volatile int numResent = 0;
-	public volatile int numReceived = 0;
-	public volatile int numLost = 0;
+	public double totTime = 0;
+	public double avgTime = 0;
+	public int numSent = 0;
+	public int numResent = 0;
+	public int numReceived = 0;
+	public int numLost = 0;
 
 	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
-	public volatile int numMissing = 0;
-	public volatile int numEnded = 0;
+	public int numMissing = 0;
+	public int numEnded = 0;
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
-	public List<Deque<Message>> msgQueue = new ArrayList<>();
+	public Map<Integer, List<Message>> msgQueue = new ConcurrentHashMap<>();
 
 	public Node() throws IOException {
 		this.receivingSocket = new ServerSocket(NODE_PORT);
@@ -141,7 +135,7 @@ public class Node {
 
 		// allocate space for every queue
 		for (int i = 0; i < N; ++i)
-			msgQueue.add(new ConcurrentLinkedDeque<>());
+			msgQueue.put(i, new CopyOnWriteArrayList<>());
 
 		// We initialize the sockets with a "pyramidal" approach
 		this.sockets = socketsSetup();
@@ -158,26 +152,24 @@ public class Node {
 		// we repeat the process M times
 		sendToAll();
 
-		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
-				new LinkedBlockingQueue<Runnable>());
+		// this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
+		// 		new LinkedBlockingQueue<Runnable>());
 
 		receiveFromAll();
 
-		this.pool.shutdown();
+		// this.pool.shutdown();
 
-		// TODO: devo capire se serve o meno quest'ultima parte...
-		try {
-			// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
-			this.pool.awaitTermination(1, TimeUnit.HOURS);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
+		// // TODO: devo capire se serve o meno quest'ultima parte...
+		// try {
+		// 	// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
+		// 	this.pool.awaitTermination(1, TimeUnit.HOURS);
+		// } catch (InterruptedException e) {
+		// 	e.printStackTrace();
+		// }
 
 		this.avgTime = this.totTime / this.numSent;
 
 		System.out.println("\n\tMulticast exchange terminated correctly\n");
-
-		// System.out.println("\n\nMessage queue list: " + msgQueue);
 
 		// Finally, we open a socket towards the master, and we send our statistics data
 		sendStatisticsToMaster();
@@ -185,22 +177,25 @@ public class Node {
 
 	@SuppressWarnings("unchecked")
 	private Map<Integer, String> registrateToMaster() {
-		ObjectOutputStream masterOs = null;
-		ObjectInputStream masterIs = null;
+		// ObjectOutputStream masterOs = null;
+		// ObjectInputStream masterIs = null;
 
 		// We open a socket towards the master, and we send our registration message
 		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
-			masterOs = new ObjectOutputStream(masterSocket.getOutputStream());
+			// masterOs = new ObjectOutputStream(masterSocket.getOutputStream());
 
 			System.out.println("Node sends: " + registrationString + " to master");
 
-			masterOs.writeObject(registrationString);
-			masterOs.flush();
+			// masterOs.writeObject(registrationString);
+			// masterOs.flush();
 
-			masterIs = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
+			Utility.send(masterSocket, registrationString);
+			// masterIs = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
 
 			System.out.println("Waiting for start message from master");
-			Object o = masterIs.readObject();
+			// Object o = masterIs.readObject();
+
+			Object o = Utility.receive(masterSocket);
 
 			// We expect to receive a Map<Integer, String> (i.e.: id --> <ip, port>)
 			// If we receive something else, we terminate our execution
@@ -213,7 +208,7 @@ public class Node {
 
 			nodes = (Map<Integer, String>) o;
 
-		} catch (IOException | ClassNotFoundException e) {
+		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(-1);
 		}
@@ -332,14 +327,14 @@ public class Node {
 				// We send a Message object
 				Message msg = new Message(NODE_ID, MSG_ID);
 
-				// If this is the last iteration, we send to every Node the termination message
-				if (n_messages == M - 1)
-					msg.setBody("end");
+				// // If this is the last iteration, we send to every Node the termination message
+				// if (n_messages == M - 1)
+				// 	msg.setBody("end");
 
 				float randomVal = r.nextFloat();
 
-				if (randomVal >= this.LP || msg.getBody().equals("end")) {
-				// if (true) { // per il momento, ignoro possibili fallimenti
+				if (randomVal >= this.LP) {
+					// if (true) {
 					++numSent;
 
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
@@ -363,6 +358,7 @@ public class Node {
 
 			++MSG_ID;
 		}
+
 	}
 
 	/**
@@ -370,9 +366,21 @@ public class Node {
 	* (N - 1 threads concurrently listening, one for each socket)
 	*/
 	private void receiveFromAll() {
+		Thread[] threads = new Thread[sockets.size()];
+
 		for (int i = 0; i < sockets.size(); ++i) {
 			Socket s = sockets.get(i);
-			this.pool.execute(new NodeThreadMulticast(this, s));
+			// this.pool.execute(new NodeThreadMulticast(this, s));
+			Thread t = new Thread(new NodeThreadMulticast(this, s));
+			t.start();
+		}
+
+		try {
+			for (Thread thread : threads) {
+				thread.join();
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 	}
 

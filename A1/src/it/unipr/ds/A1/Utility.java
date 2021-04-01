@@ -77,7 +77,7 @@ public class Utility {
 			Properties p = new Properties();
 			p.setProperty("master", address + "," + port);
 			p.setProperty("LP", "0.05f");
-			p.setProperty("M", "10"); // TODO: all possible values for M
+			p.setProperty("M", "1000"); // TODO: all possible values for M
 
 			p.store(output, null);
 		} catch (IOException io) {
@@ -91,29 +91,29 @@ public class Utility {
 	* @param s The socket over which m will be sent
 	* @param obj The object to be sent (instance of Message or Statistics)
 	*/
-	@SuppressWarnings("unchecked")
+	// @SuppressWarnings("unchecked")
 	public static void send(Socket s, Object obj) {
 		ObjectOutputStream os = null;
 		try {
 			os = new ObjectOutputStream(s.getOutputStream());
+			// if (obj instanceof Message) {
+			// 	os.writeObject((Message) obj);
+			// }
 
-			if (obj instanceof Message) {
-				os.writeObject((Message) obj);
-			}
+			// else if (obj instanceof Statistics) {
+			// 	os.writeObject((Statistics) obj);
+			// }
 
-			else if (obj instanceof Statistics) {
-				os.writeObject((Statistics) obj);
-			}
+			// else if (obj instanceof Map<?, ?>) {
+			// 	os.writeObject((Map<Integer, String>) obj);
+			// }
 
-			else if (obj instanceof Map<?, ?>) {
-				os.writeObject((Map<Integer, String>) obj);
-			}
+			// else {
+			// 	System.out.println("Sending of " + obj + " not supported");
+			// 	System.exit(-1);
+			// }
 
-			else {
-				System.out.println("Sending of " + obj + " not supported");
-				System.exit(-1);
-			}
-			
+			os.writeObject(obj);
 			os.flush();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -122,7 +122,7 @@ public class Utility {
 
 	/**
 	* Method that receives and returns an Object obj over a Socket s
-	* @param s The socket over which m will be received
+	* @param s The socket over which obj will be received
 	* @return obj The object to be received
 	*/
 	public static Object receive(Socket s) {

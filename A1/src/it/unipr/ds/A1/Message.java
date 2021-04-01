@@ -5,7 +5,7 @@ import java.io.Serializable;
 /**
  * Class that defines the structure of a Message
  */
-public final class Message implements Serializable {
+public final class Message implements Serializable, Comparable<Message> {
 	private static final long serialVersionUID = -8002716552973566762L;
 
 	private int senderID;
@@ -57,4 +57,14 @@ public final class Message implements Serializable {
 		Message msg = (Message) obj;
 		return this.senderID == msg.senderID && this.messageID == msg.messageID && this.body.equals(msg.body);
 	}
+
+	@Override
+	public int compareTo(Message o) {
+		Message other = (Message) o;
+
+		if(this.messageID < other.messageID) return -1;
+		else if(this.messageID < other.messageID) return 1;
+		return 0;
+	}
+
 }
