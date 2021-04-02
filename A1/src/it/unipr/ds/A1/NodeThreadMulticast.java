@@ -127,7 +127,7 @@ public class NodeThreadMulticast implements Runnable {
 			int lastId = currentQueue.get(currentQueue.size() - 2).getMessageID();
 			diff = new int[currentId - lastId - 1];
 			for (int i = 0; i < diff.length; ++i)
-				diff[i] = lastId + 1;
+				diff[i] = lastId + i + 1;
 
 		}
 
