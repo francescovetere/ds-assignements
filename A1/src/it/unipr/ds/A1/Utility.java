@@ -62,22 +62,23 @@ public class Utility {
 	/**
 	 * Method that writes on the .properties file all the necessary parameters for the system:
 	 * master=address,port
-	 * LP=0.05
-	 * M=100
 	 * Used to initialize the config file after Master node starting
 	 * 
 	 * @param properties String that identifies the properties file
 	 * @param address    String that identifies the address (key)
 	 * @param port       Int that identifies the port (value)
+	 * @param M          Int that identifies the number of messages to be exchanged
+	 * @param LP         Float that identifies the probability that a send operation will fail
 	 * @throws IOException
 	 */
-	public static void writeConfig(final String properties, final String address, final int port) throws IOException {
+	public static void writeConfig(final String properties, final String address, final int port, final int M,
+			final float LP) throws IOException {
 		// Create an OutputStream to write on file
 		try (OutputStream output = new FileOutputStream(properties)) {
 			Properties p = new Properties();
 			p.setProperty("master", address + "," + port);
-			p.setProperty("LP", "0.05f");
-			p.setProperty("M", "100"); // TODO: all possible values for M
+			p.setProperty("M", String.valueOf(M));
+			p.setProperty("LP", String.valueOf(LP));
 
 			p.store(output, null);
 		} catch (IOException io) {
@@ -89,29 +90,12 @@ public class Utility {
 	/**
 	* Method that sends an Object obj over a socket s
 	* @param s The socket over which m will be sent
-	* @param obj The object to be sent (instance of Message or Statistics)
+	* @param obj The object to be sent
 	*/
-	// @SuppressWarnings("unchecked")
 	public static void send(Socket s, Object obj) {
 		ObjectOutputStream os = null;
 		try {
 			os = new ObjectOutputStream(s.getOutputStream());
-			// if (obj instanceof Message) {
-			// 	os.writeObject((Message) obj);
-			// }
-
-			// else if (obj instanceof Statistics) {
-			// 	os.writeObject((Statistics) obj);
-			// }
-
-			// else if (obj instanceof Map<?, ?>) {
-			// 	os.writeObject((Map<Integer, String>) obj);
-			// }
-
-			// else {
-			// 	System.out.println("Sending of " + obj + " not supported");
-			// 	System.exit(-1);
-			// }
 
 			os.writeObject(obj);
 			os.flush();

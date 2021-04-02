@@ -22,6 +22,8 @@ public class Master {
 
 	private static String MASTER_ADDR;
 	private static int MASTER_PORT;
+	private static int M;
+	private static float LP;
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
@@ -59,7 +61,7 @@ public class Master {
 
 	public Master() {
 		try {
-			Utility.writeConfig(PROPERTIES, MASTER_ADDR, MASTER_PORT);
+			Utility.writeConfig(PROPERTIES, MASTER_ADDR, MASTER_PORT, M, LP);
 			this.mainSocket = new ServerSocket(MASTER_PORT);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -162,13 +164,15 @@ public class Master {
 	}
 
 	public static void main(final String[] args) throws IOException {
-		if (args.length != 2) {
-			System.out.println("Usage: java Master <MASTER_ADDR> <MASTER_PORT>");
+		if (args.length != 4) {
+			System.out.println("Usage: java Master <MASTER_ADDR> <MASTER_PORT> <M> <LP>");
 			System.exit(1);
 		}
 
 		MASTER_ADDR = args[0];
 		MASTER_PORT = Integer.parseInt(args[1]);
+		M = Integer.parseInt(args[2]);
+		LP = Float.parseFloat(args[3]);
 
 		new Master().start();
 	}

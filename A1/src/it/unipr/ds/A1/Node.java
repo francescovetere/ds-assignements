@@ -15,6 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * and receive messages
  */
 public class Node {
+	// A synchronization object, useful in NodeThreadMulticast
 	public Object lock = new Object();
 
 	private static int MASTER_PORT;
@@ -35,13 +36,14 @@ public class Node {
 	// Number of messages
 	public int M;
 
+	// The list of messages that this node will send to all the other nodes
 	public List<Message> messages;
 
 	// Number of nodes
 	public int N;
 
 	// List of sockets to communicate with other N - 1 nodes
-	private List<Socket> sockets;
+	public List<Socket> sockets;
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
@@ -50,21 +52,14 @@ public class Node {
 	// The socket from which this Node will be receiving messages from other Nodes
 	private ServerSocket receivingSocket;
 
-	// ****************** N.B. ******************
-	// Le seguenti variabili sono public solamente per comodità di accesso da NodeThreadMulticast
-	// Ovviamente, dovrebbero essere private e avere ciascuna la propria get e set...
-
 	// Statistics variables
 	public double totTime = 0;
 	public double avgTime = 0;
 	public int numSent = 0;
 	public int numResent = 0;
-	public int numReceived = 0;
+	public int numReceived = 0; // N.B.: Includes numReReceived
 	public int numLost = 0;
-
-	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
 	public int numMissing = 0;
-	public int numEnded = 0;
 	public int numReReceived = 0;
 
 	// The queue of received messages
@@ -148,6 +143,13 @@ public class Node {
 		sendToAll();
 
 		receiveFromAll();
+
+		try {
+			for (Socket socket : sockets)
+				socket.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 
 		this.avgTime = this.totTime / this.numSent;
 
@@ -316,10 +318,10 @@ public class Node {
 				float randomVal = r.nextFloat();
 
 				// If this is the last iteration, we send to every Node the termination message
-				if(n_messages == M - 1) {
+				if (n_messages == M - 1) {
 					randomVal = 1;
 				}
-					
+
 				if (randomVal >= this.LP) {
 					// if (true) {
 					++numSent;
@@ -359,7 +361,7 @@ public class Node {
 			threads[i] = t;
 			t.start();
 		}
-
+		
 		try {
 			for (Thread thread : threads) {
 				thread.join();
