@@ -20,14 +20,14 @@ public class NodeThreadMulticast implements Runnable {
 	@Override
 	public void run() {
 		while (true) {
-			
+
 			// System.out.println("===" + " numMissing: " + node.numMissing + " numResent: " + node.numResent
 			// 		+ " numLost: " + node.numLost + " numEnded: " + node.numEnded + " ===");
 
 			synchronized (node.pool) {
 				System.out.println("===" + " numMissing: " + node.numMissing + "===");
 				System.out.println("===" + " queue: " + "===");
-				for (int i = 0; i < node.msgQueue.size(); ++i) {
+				for (int i : node.msgQueue.keySet()) {
 					System.out.print(i + ": ");
 					List<Message> queue = node.msgQueue.get(i);
 					queue.forEach(m -> System.out.print(m.getMessageID() + " "));
@@ -42,11 +42,19 @@ public class NodeThreadMulticast implements Runnable {
 			if (obj instanceof Message) {
 				Message msg = (Message) obj;
 
-				System.out.println("** Received " + msg);
+				synchronized (node.pool) {
+					System.out.println("** Received " + msg);
+
+					if (msg.getSenderID() == node.NODE_ID)
+						System.out.println("\t\tOPS\n\n");
+				}
 
 				if (msg.getBody().equals("request")) {
-					// Message resMsg = new Message(node.NODE_ID, msg.getMessageID(), "response");
-					Message resMsg = new Message(msg.getSenderID(), msg.getMessageID(), "response");
+					Message resMsg = node.messages.get(msg.getMessageID());
+					resMsg.setBody("response");
+
+					System.out.println("************************\t\tMando: " + resMsg + "\n");
+
 					Utility.send(nodeSocket, resMsg);
 					continue;
 				}
@@ -72,10 +80,11 @@ public class NodeThreadMulticast implements Runnable {
 					// synchronized (node.pool) {
 
 					for (int i = 0; i < diff.length; ++i) {
-						Message reqMsg = new Message(msg.getSenderID(), diff[i], "request");
+						Message reqMsg = new Message(node.NODE_ID, diff[i], "request");
 
-						System.out.println("* Lost " + reqMsg.getMessageID() + " from " + reqMsg.getSenderID()
-								+ ": sending request for re-send");
+						System.out.println("\t\t\t\n\n\n\n\n\n\n\n\n\n\n\n\n* Lost " + reqMsg.getMessageID() + " from "
+								+ msg.getSenderID() + ": sending request for re-send: " + reqMsg
+								+ "\n\n\n\n\n\n\n\n\n\n\n");
 
 						Utility.send(nodeSocket, reqMsg);
 
@@ -107,10 +116,12 @@ public class NodeThreadMulticast implements Runnable {
 		}
 
 		else {
+
 			int lastId = currentQueue.get(currentQueue.size() - 2).getMessageID();
 			diff = new int[currentId - lastId - 1];
 			for (int i = 0; i < diff.length; ++i)
 				diff[i] = lastId + 1;
+
 		}
 
 		System.out.print("Missing " + diff.length + " messages: [");

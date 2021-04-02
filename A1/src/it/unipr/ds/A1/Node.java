@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,14 +36,14 @@ public class Node {
 	// id will be assigned by Master
 	String registrationString = null;
 
-	private int MSG_ID = 0;
-
 	private static final String PROPERTIES = "config.properties";
 	// Probability of error
 	private float LP;
 
 	// Number of messages
 	public int M;
+
+	public List<Message> messages;
 
 	// Number of nodes
 	public int N;
@@ -97,6 +98,8 @@ public class Node {
 		this.LP = Float.parseFloat(LP);
 		this.M = Integer.parseInt(M);
 
+		messages = new CopyOnWriteArrayList<>();
+
 		// What we send to the master in order to registrate
 		registrationString = NODE_ADDR + ":" + NODE_PORT;
 
@@ -134,8 +137,10 @@ public class Node {
 		N = nodes.size();
 
 		// allocate space for every queue
-		for (int i = 0; i < N; ++i)
-			msgQueue.put(i, new CopyOnWriteArrayList<>());
+		for (int id : nodes.keySet()) {
+			if (id != NODE_ID)
+				msgQueue.put(id, new CopyOnWriteArrayList<>());
+		}
 
 		// We initialize the sockets with a "pyramidal" approach
 		this.sockets = socketsSetup();
@@ -236,7 +241,7 @@ public class Node {
 
 		for (int i = 0; i < createdSockets.size(); ++i) {
 			// We send a Message object
-			Message msg = new Message(NODE_ID, MSG_ID);
+			Message msg = new Message(NODE_ID, 0);
 
 			Utility.send(createdSockets.get(i), msg);
 
@@ -323,9 +328,12 @@ public class Node {
 		Random r = new Random(NODE_ID);
 
 		for (int n_messages = 0; n_messages < M; ++n_messages) {
+			// We send a Message object
+			Message msg = new Message(NODE_ID, n_messages, "body " + n_messages);
+			messages.add(msg);
+
+			// Message msg = messages.get(n_messages);
 			for (int i = 0; i < sockets.size(); ++i) {
-				// We send a Message object
-				Message msg = new Message(NODE_ID, MSG_ID);
 
 				// // If this is the last iteration, we send to every Node the termination message
 				// if (n_messages == M - 1)
@@ -355,8 +363,6 @@ public class Node {
 				}
 
 			}
-
-			++MSG_ID;
 		}
 
 	}
@@ -372,6 +378,7 @@ public class Node {
 			Socket s = sockets.get(i);
 			// this.pool.execute(new NodeThreadMulticast(this, s));
 			Thread t = new Thread(new NodeThreadMulticast(this, s));
+			threads[i] = t;
 			t.start();
 		}
 
