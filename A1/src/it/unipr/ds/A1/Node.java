@@ -7,23 +7,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Class that defines a generic peer (node) in the system, which can both send
  * and receive messages
  */
 public class Node {
-	private static final int COREPOOL = 100;
-	private static final int MAXPOOL = 100;
-	private static final long IDLETIME = 5000;
-
-	public ThreadPoolExecutor pool;
+	public Object lock = new Object();
 
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
@@ -73,6 +65,7 @@ public class Node {
 	// 2 variabili che servono solamente per capire quando uscire dal while(true) dello scambio multicast
 	public int numMissing = 0;
 	public int numEnded = 0;
+	public int numReReceived = 0;
 
 	// The queue of received messages
 	// (shared by the main thread and the N-1 storing threads)
@@ -80,9 +73,6 @@ public class Node {
 
 	public Node() throws IOException {
 		this.receivingSocket = new ServerSocket(NODE_PORT);
-
-		this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
-				new LinkedBlockingQueue<Runnable>());
 
 		String LP = null;
 		String M = null;
@@ -157,20 +147,7 @@ public class Node {
 		// we repeat the process M times
 		sendToAll();
 
-		// this.pool = new ThreadPoolExecutor(COREPOOL, MAXPOOL, IDLETIME, TimeUnit.MILLISECONDS,
-		// 		new LinkedBlockingQueue<Runnable>());
-
 		receiveFromAll();
-
-		// this.pool.shutdown();
-
-		// // TODO: devo capire se serve o meno quest'ultima parte...
-		// try {
-		// 	// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
-		// 	this.pool.awaitTermination(1, TimeUnit.HOURS);
-		// } catch (InterruptedException e) {
-		// 	e.printStackTrace();
-		// }
 
 		this.avgTime = this.totTime / this.numSent;
 
@@ -241,7 +218,7 @@ public class Node {
 
 		for (int i = 0; i < createdSockets.size(); ++i) {
 			// We send a Message object
-			Message msg = new Message(NODE_ID, 0);
+			Message msg = new Message(NODE_ID, -1);
 
 			Utility.send(createdSockets.get(i), msg);
 
@@ -296,22 +273,24 @@ public class Node {
 	private List<Socket> receiveSockets() {
 		List<Socket> receivedSockets = new ArrayList<>();
 
+		Thread[] threads = new Thread[NODE_ID];
 		try {
 			for (int i = 0; i < NODE_ID; ++i) {
 				Socket s = receivingSocket.accept();
 				receivedSockets.add(s);
-				pool.execute(new NodeThreadSetup(s));
+
+				Thread t = new Thread(new NodeThreadSetup(s));
+				threads[i] = t;
+				t.start();
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
-		pool.shutdown();
-
-		// TODO: devo capire se serve o meno quest'ultima parte...
 		try {
-			// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
-			pool.awaitTermination(1, TimeUnit.HOURS);
+			for (Thread thread : threads) {
+				thread.join();
+			}
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -334,13 +313,13 @@ public class Node {
 
 			// Message msg = messages.get(n_messages);
 			for (int i = 0; i < sockets.size(); ++i) {
-
-				// // If this is the last iteration, we send to every Node the termination message
-				// if (n_messages == M - 1)
-				// 	msg.setBody("end");
-
 				float randomVal = r.nextFloat();
 
+				// If this is the last iteration, we send to every Node the termination message
+				if(n_messages == M - 1) {
+					randomVal = 1;
+				}
+					
 				if (randomVal >= this.LP) {
 					// if (true) {
 					++numSent;
@@ -376,7 +355,6 @@ public class Node {
 
 		for (int i = 0; i < sockets.size(); ++i) {
 			Socket s = sockets.get(i);
-			// this.pool.execute(new NodeThreadMulticast(this, s));
 			Thread t = new Thread(new NodeThreadMulticast(this, s));
 			threads[i] = t;
 			t.start();

@@ -20,12 +20,10 @@ public class NodeThreadMulticast implements Runnable {
 	@Override
 	public void run() {
 		while (true) {
+			synchronized (node.lock) {
+				System.out.println("===" + " numMissing: " + node.numMissing + " numReReceived: " + node.numReReceived
+				+ " ===\n" + "=== numLost: " + node.numLost + " numReSent: " + node.numResent + " ===\n");
 
-			// System.out.println("===" + " numMissing: " + node.numMissing + " numResent: " + node.numResent
-			// 		+ " numLost: " + node.numLost + " numEnded: " + node.numEnded + " ===");
-
-			synchronized (node.pool) {
-				System.out.println("===" + " numMissing: " + node.numMissing + "===");
 				System.out.println("===" + " queue: " + "===");
 				for (int i : node.msgQueue.keySet()) {
 					System.out.print(i + ": ");
@@ -42,21 +40,30 @@ public class NodeThreadMulticast implements Runnable {
 			if (obj instanceof Message) {
 				Message msg = (Message) obj;
 
-				synchronized (node.pool) {
+				synchronized (node.lock) {
 					System.out.println("** Received " + msg);
 
 					if (msg.getSenderID() == node.NODE_ID)
-						System.out.println("\t\tOPS\n\n");
+						System.out.println("\t\tOps...\n");
 				}
 
 				if (msg.getBody().equals("request")) {
 					Message resMsg = node.messages.get(msg.getMessageID());
 					resMsg.setBody("response");
 
-					System.out.println("************************\t\tMando: " + resMsg + "\n");
+					System.out.println("*\tSend response:\n" + resMsg + "\n");
 
 					Utility.send(nodeSocket, resMsg);
+
+					synchronized (node.lock) {
+						++node.numResent;
+					}
+
 					continue;
+				}
+
+				synchronized (node.lock) {
+					++node.numReceived;
 				}
 
 				List<Message> currentQueue = node.msgQueue.get(msg.getSenderID());
@@ -65,8 +72,8 @@ public class NodeThreadMulticast implements Runnable {
 				Collections.sort(currentQueue); // ovviamente quindi ordino, per garantire che l'ultimo elemento sia sempre il massimo
 
 				if (msg.getBody().equals("response")) {
-					synchronized (node.pool) {
-						--node.numMissing;
+					synchronized (node.lock) {
+						++node.numReReceived;
 					}
 
 					continue;
@@ -77,7 +84,7 @@ public class NodeThreadMulticast implements Runnable {
 				diff = checkQueue(currentQueue, msg.getMessageID());
 
 				if (diff != null) {
-					// synchronized (node.pool) {
+					// synchronized (node.lock) {
 
 					for (int i = 0; i < diff.length; ++i) {
 						Message reqMsg = new Message(node.NODE_ID, diff[i], "request");
@@ -89,7 +96,7 @@ public class NodeThreadMulticast implements Runnable {
 						Utility.send(nodeSocket, reqMsg);
 
 						// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
-						synchronized (node.pool) {
+						synchronized (node.lock) {
 							++node.numMissing;
 						}
 					}
