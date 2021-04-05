@@ -17,7 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class Node {
 	// A synchronization object, useful in NodeThreadMulticast
 	public Object lock = new Object();
-
+	
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
 
@@ -143,13 +143,6 @@ public class Node {
 		sendToAll();
 
 		receiveFromAll();
-
-		try {
-			for (Socket socket : sockets)
-				socket.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 
 		this.avgTime = this.totTime / this.numSent;
 
@@ -361,14 +354,17 @@ public class Node {
 			threads[i] = t;
 			t.start();
 		}
-		
+
+		// The node waits the temrination of all the threads it launched
 		try {
 			for (Thread thread : threads) {
 				thread.join();
 			}
-		} catch (InterruptedException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
+
+		System.out.println("Nodes terminated their multicast exchange");
 	}
 
 	/**
@@ -396,6 +392,16 @@ public class Node {
 
 	public Map<Integer, String> getNodes() {
 		return nodes;
+	}
+
+	public void close() {
+		try {
+			for (Socket s : sockets) {
+				s.close();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public static void main(final String[] args) throws IOException {
