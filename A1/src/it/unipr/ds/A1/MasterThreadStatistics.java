@@ -6,9 +6,11 @@ import java.net.Socket;
  * Class that handles the reception of final node statistics
  */
 public class MasterThreadStatistics implements Runnable {
-	private Socket nodeSocket; // this thread's socket towards a Node that 
+	private Socket nodeSocket; // this thread's socket towards a Node that sent its statistics
+	private Master master;     // reference to the Master
 
-	public MasterThreadStatistics(final Socket nodeSocket) {
+	public MasterThreadStatistics(final Master master, final Socket nodeSocket) {
+		this.master = master;
 		this.nodeSocket = nodeSocket;
 	}
 
@@ -18,7 +20,9 @@ public class MasterThreadStatistics implements Runnable {
 
 		if (obj instanceof Statistics) {
 			Statistics statistics = (Statistics) obj;
-			System.out.println("**Received termination message from Node " + statistics.nodeID + ":\n" + statistics);
+			System.out.println("**Received termination message from Node " + statistics.nodeID);
+
+			master.statsMap.put(statistics.nodeID, statistics);
 		}
 	}
 }

@@ -9,6 +9,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import jxl.write.WritableWorkbook;
+
 /**
  * Class that defines a master node, which provides a naming service for the
  * communication nodes
@@ -31,6 +33,9 @@ public class Master {
 
 	private ServerSocket mainSocket;
 	private ThreadPoolExecutor pool;
+
+	// The map of received statistics, on which the N threads MasterThreadStatistics write
+	public Map<Integer, Statistics> statsMap = new ConcurrentHashMap<>();
 
 	/**
 	 * An inner class that handles administrator inputs 
@@ -93,6 +98,8 @@ public class Master {
 			this.pool.notifyAll();
 		}
 
+		this.pool.shutdown();
+
 		System.out.println("\nRegistration phase terminated");
 		System.out.println("Master collected the following " + nodes.size() + " nodes:");
 		nodes.forEach((id, addrAndPort) -> System.out.println("<" + id + "; " + addrAndPort + ">"));
@@ -104,15 +111,13 @@ public class Master {
 		// be handled by a new Thread
 		acceptNodesStatistics();
 
-		this.pool.shutdown();
+		System.out.println("\nEvery node sent its statistics");
 
-		// TODO: devo capire se serve o meno quest'ultima parte...
-		try {
-			// Blocks until all tasks have completed execution after a shutdown request, or the timeout occurs, or the current thread is interrupted, whichever happens first.
-			this.pool.awaitTermination(1, TimeUnit.HOURS);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		for(int i = 0; i < statsMap.size(); ++i) {
+			System.out.println(statsMap.get(i));
 		}
+
+		 WritableWorkbook workbook;
 	}
 
 	private void acceptNodesRegistrations() {
@@ -130,6 +135,8 @@ public class Master {
 	}
 
 	private void acceptNodesStatistics() {
+		Thread[] threads = new Thread[nodes.size()];
+
 		try {
 			this.mainSocket = new ServerSocket(MASTER_PORT);
 		} catch (IOException e) {
@@ -139,10 +146,21 @@ public class Master {
 		for (int i = 0; i < nodes.size(); ++i) {
 			try {
 				Socket s = mainSocket.accept();
-				this.pool.execute(new MasterThreadStatistics(s));
+				Thread t = new Thread(new MasterThreadStatistics(this, s));
+				t.start();
+				threads[i] = t;
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+		}
+
+		// The master waits for all the nodes to send their statistics
+		try {
+			for (Thread thread : threads) {
+				thread.join();
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 

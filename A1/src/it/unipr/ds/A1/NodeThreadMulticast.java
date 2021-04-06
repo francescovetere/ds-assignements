@@ -1,5 +1,6 @@
 package it.unipr.ds.A1;
 
+import java.io.ObjectInputStream;
 import java.net.Socket;
 import java.util.Comparator;
 import java.util.List;
@@ -50,8 +51,15 @@ public class NodeThreadMulticast implements Runnable {
 					}
 				}
 
-				Object obj = Utility.receive(nodeSocket);
+				// Object obj = Utility.receive(nodeSocket);
+				// (we implement a manual read because we want to handle the exception in ad hoc catch)
+				ObjectInputStream is = null;
+				Object obj = null;
+				
+				is = new ObjectInputStream(nodeSocket.getInputStream());
 
+				obj = is.readObject();
+				
 				if (obj instanceof Message) {
 					Message msg = (Message) obj;
 

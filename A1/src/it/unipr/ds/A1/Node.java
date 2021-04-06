@@ -62,7 +62,7 @@ public class Node {
 	public int numMissing = 0;
 	public int numReReceived = 0;
 
-	// The queue of received messages
+	// The map of received messages
 	// (shared by the main thread and the N-1 storing threads)
 	public Map<Integer, List<Message>> msgQueue = new ConcurrentHashMap<>();
 
@@ -144,9 +144,9 @@ public class Node {
 
 		receiveFromAll();
 
-		this.avgTime = this.totTime / this.numSent;
-
 		System.out.println("\n\tMulticast exchange terminated correctly\n");
+		
+		this.avgTime = this.totTime / this.numSent;
 
 		// Finally, we open a socket towards the master, and we send our statistics data
 		sendStatisticsToMaster();
@@ -363,8 +363,6 @@ public class Node {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
-		System.out.println("Nodes terminated their multicast exchange");
 	}
 
 	/**

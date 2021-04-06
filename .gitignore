@@ -24,7 +24,8 @@ hs_err_pid*
 
 */.project
 */.classpath
-/bin/
+*/bin
+*/lib
 *.pdf
 */*.pdf
 .metadata
