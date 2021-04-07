@@ -1,5 +1,6 @@
 package it.unipr.ds.A1;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -10,6 +11,15 @@ import java.net.Socket;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
+
+import jxl.Workbook;
+import jxl.format.Colour;
+import jxl.write.Label;
+import jxl.write.WritableCellFormat;
+import jxl.write.WritableFont;
+import jxl.write.WritableSheet;
+import jxl.write.WritableWorkbook;
+import jxl.write.WriteException;
 
 /*
  * Class containing helpful static methods used across other classes
@@ -102,6 +112,8 @@ public class Utility {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		
+		
 	}
 
 	/**
@@ -122,5 +134,90 @@ public class Utility {
 
 		return obj;
 	}
+	
+	public static void createExcel(File file, Map<Integer, Statistics> map) {
+		if(file.exists())
+			file.delete();
+			
+        WritableWorkbook workbook;
+        
+            try {
+                workbook = Workbook.createWorkbook(file);
+                
+                WritableSheet sheet = workbook.createSheet("report", 0);
+                
+                WritableCellFormat headerFormat = new WritableCellFormat();
+                WritableFont font = new WritableFont(WritableFont.ARIAL, 12, WritableFont.NO_BOLD);
+                
+                headerFormat.setFont(font);
+                headerFormat.setBackground(Colour.LIGHT_BLUE);
+                headerFormat.setWrap(true);
+                
+                int colSize = 30;
+                int nCol = 0;
+                
+                Label headerLabel = new Label(nCol, 0, "NodeID", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                headerLabel = new Label(nCol, 0, "TotalTime [ms]", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                headerLabel = new Label(nCol, 0, "AverageTime [ms]", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                headerLabel = new Label(nCol, 0, "Num Sent", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                headerLabel = new Label(nCol, 0, "Num Resent", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                headerLabel = new Label(nCol, 0, "Num Received", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                headerLabel = new Label(nCol, 0, "Num Lost", headerFormat);
+                sheet.setColumnView(nCol, colSize);
+                sheet.addCell(headerLabel);
+                ++nCol;
+                
+                WritableCellFormat cellFormat = new WritableCellFormat();
+                cellFormat.setWrap(true);
 
+                for(int i = 0; i < map.size(); ++i) {
+                    Label nodeLbl = new Label(0, i+2, Integer.toString(map.get(i).nodeID), cellFormat);
+                    Label totLbl = new Label(1, i+2, Double.toString(map.get(i).totTime), cellFormat);
+                    Label avgLbl = new Label(2, i+2, Double.toString(map.get(i).avgTime), cellFormat);
+                    Label sentLbl = new Label(3, i+2, Integer.toString(map.get(i).numSent), cellFormat);
+                    Label resentLbl = new Label(4, i+2, Integer.toString(map.get(i).numResent), cellFormat);
+                    Label rcvLbl = new Label(5, i+2, Integer.toString(map.get(i).numReceived), cellFormat);
+                    Label lostLbl = new Label(6, i+2, Integer.toString(map.get(i).numLost), cellFormat);    
+                    
+                    sheet.addCell(nodeLbl);
+                    sheet.addCell(totLbl);
+                    sheet.addCell(avgLbl);
+                    sheet.addCell(sentLbl);
+                    sheet.addCell(resentLbl);
+                    sheet.addCell(rcvLbl);
+                    sheet.addCell(lostLbl);
+                }
+
+                workbook.write();
+                workbook.close();
+            } catch (IOException | WriteException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+	
 }

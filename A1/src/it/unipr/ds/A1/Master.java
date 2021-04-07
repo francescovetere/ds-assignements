@@ -1,14 +1,17 @@
 package it.unipr.ds.A1;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import jxl.Workbook;
 import jxl.write.WritableWorkbook;
 
 /**
@@ -52,14 +55,18 @@ public class Master {
 		@Override
 		public void run() {
 			String adminInput;
-
+			Scanner sc = new Scanner(System.in);
+			
 			do {
 				System.out.println("Type 'end' to end the registration phase");
-				adminInput = System.console().readLine();
+//				adminInput = System.console().readLine();
+				adminInput = sc.nextLine();
 
 			} while (!adminInput.equals("end"));
 
+			sc.close();
 			master.close();
+			
 		}
 
 	}
@@ -67,6 +74,7 @@ public class Master {
 	public Master() {
 		try {
 			Utility.writeConfig(PROPERTIES, MASTER_ADDR, MASTER_PORT, M, LP);
+			System.out.println(M);
 			this.mainSocket = new ServerSocket(MASTER_PORT);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -117,7 +125,12 @@ public class Master {
 			System.out.println(statsMap.get(i));
 		}
 
-		 WritableWorkbook workbook;
+		
+//		System.out.println(Workbook.getVersion());
+		String filename = "report-m-" + M + ".xls";
+		Utility.createExcel(new File(filename), statsMap);
+		
+		System.out.println(filename + " generated correctly");
 	}
 
 	private void acceptNodesRegistrations() {

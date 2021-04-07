@@ -300,7 +300,7 @@ public class Node {
 	private void sendToAll() {
 		// Send msg only if generated random value is bigger than 0.05
 		Random r = new Random(NODE_ID);
-
+		
 		for (int n_messages = 0; n_messages < M; ++n_messages) {
 			// We send a Message object
 			Message msg = new Message(NODE_ID, n_messages, "body " + n_messages);

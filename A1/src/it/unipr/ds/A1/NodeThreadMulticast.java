@@ -12,7 +12,7 @@ public class NodeThreadMulticast implements Runnable {
 
 	private Node node; // reference to the Node
 	private Socket nodeSocket; // this thread's socket towards a Node that sent a multicast message
-	boolean verbose = true; // toggle for logs
+	boolean verbose = false; // toggle for logs
 
 	public NodeThreadMulticast(final Node node, final Socket nodeSocket) {
 		this.node = node;
