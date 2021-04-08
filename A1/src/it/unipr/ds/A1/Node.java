@@ -335,7 +335,6 @@ public class Node {
 					System.out.println("Message lost!");
 					// Utility.send(sockets.get(i), null); //TODO: Forse si puo' anche non mettere?
 				}
-
 			}
 		}
 
