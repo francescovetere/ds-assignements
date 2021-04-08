@@ -3,6 +3,7 @@ package it.unipr.ds.A1;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class Node {
 	// A synchronization object, useful in NodeThreadMulticast
 	public Object lock = new Object();
-	
+
 	private static int MASTER_PORT;
 	private static String MASTER_ADDR;
 
@@ -131,9 +132,13 @@ public class Node {
 		this.sockets = socketsSetup();
 
 		System.out.println("\n---Total " + sockets.size() + " sockets---");
-		for (int i = 0; i < sockets.size(); ++i) {
-			System.out.println("\t<" + sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
-					+ sockets.get(i).getPort() + ">");
+		try {
+			for (int i = 0; i < sockets.size(); ++i) {
+				System.out.println("\t<" + sockets.get(i).getInetAddress().getCanonicalHostName() + ":"
+						+ sockets.get(i).getPort() + ">" + " size: " + sockets.get(i).getSendBufferSize());
+			}
+		} catch (SocketException e) {
+			e.printStackTrace();
 		}
 
 		// At this point, we have our N - 1 sockets:
@@ -145,7 +150,7 @@ public class Node {
 		receiveFromAll();
 
 		System.out.println("\n\tMulticast exchange terminated correctly\n");
-		
+
 		this.avgTime = this.totTime / this.numSent;
 
 		// Finally, we open a socket towards the master, and we send our statistics data
@@ -300,7 +305,7 @@ public class Node {
 	private void sendToAll() {
 		// Send msg only if generated random value is bigger than 0.05
 		Random r = new Random(NODE_ID);
-		
+
 		for (int n_messages = 0; n_messages < M; ++n_messages) {
 			// We send a Message object
 			Message msg = new Message(NODE_ID, n_messages, "body " + n_messages);
@@ -316,7 +321,6 @@ public class Node {
 				}
 
 				if (randomVal >= this.LP) {
-					// if (true) {
 					++numSent;
 
 					System.out.println("*Send message: " + msg.getMessageID() + " on socket "
@@ -333,9 +337,17 @@ public class Node {
 					++numLost;
 
 					System.out.println("Message lost!");
-					// Utility.send(sockets.get(i), null); //TODO: Forse si puo' anche non mettere?
+					Utility.send(sockets.get(i), null); //TODO: Forse si puo' anche non mettere?
 				}
 			}
+
+			// ??? (N = 2, M = 30000 funziona)
+			// if (M > 10000)
+			// 	try {
+			// 		Thread.sleep(5);
+			// 	} catch (Exception e) {
+			// 		e.printStackTrace();
+			// 	}
 		}
 
 	}

@@ -41,7 +41,6 @@ public class NodeThreadMulticast implements Runnable {
 							&& node.numReceived == (node.M) * ((node.N) - 1)) {
 
 						System.out.println("Exit condition for this thread became true");
-						System.out.println("TODO: Synchronization point");
 						
 						// 1)
 						node.close();
