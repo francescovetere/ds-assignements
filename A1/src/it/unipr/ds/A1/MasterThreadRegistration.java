@@ -25,18 +25,18 @@ public class MasterThreadRegistration implements Runnable {
 			System.out.println("Master received request to register from " + registrationString);
 
 			// Now, we add the <key, val> pair to the master's HashMap of nodes
-			Map<Integer, String> nodes = this.master.getNodes();
+			Map<Integer, String> nodes = this.master.nodes;
 
 			// Set the Id of the Node with the current size of Nodes list
 			int nodeId = nodes.size();
 
 			nodes.put(nodeId, registrationString);
 
-			// We wait on the pool object, until the Master will wake up this and all other threads in the pool
+			// We wait on the lock object, until the Master will wake up this and all other threads in the pool
 			// That is, when the admin will enter the termination string
 			try {
-				synchronized (this.master.getPool()) {
-					this.master.getPool().wait();
+				synchronized (this.master.lock) {
+					this.master.lock.wait();
 				}
 			} catch (InterruptedException e) {
 				e.printStackTrace();

@@ -1,6 +1,5 @@
 package it.unipr.ds.A1;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -11,14 +10,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import jxl.Workbook;
-import jxl.write.WritableWorkbook;
-
 /**
  * Class that defines a master node, which provides a naming service for the
  * communication nodes
  */
 public class Master {
+	// A synchronization object, used here and also referenced in MasterThreadRegistration
+	public Object lock = new Object();
+
 	private static final int COREPOOL = 10;
 	private static final int MAXPOOL = 100;
 	private static final long IDLETIME = 5000;
@@ -32,13 +31,13 @@ public class Master {
 
 	// a map containing all the registered nodes,
 	// in the form <key, val> where key = ID, val = ip:port
-	private Map<Integer, String> nodes;
+	public Map<Integer, String> nodes;
 
 	private ServerSocket mainSocket;
 	private ThreadPoolExecutor pool;
 
 	// The map of received statistics, on which the N threads MasterThreadStatistics write
-	public Map<Integer, Statistics> statsMap = new ConcurrentHashMap<>();
+	public Map<Integer, Statistics> stats;
 
 	/**
 	 * An inner class that handles administrator inputs 
@@ -56,17 +55,16 @@ public class Master {
 		public void run() {
 			String adminInput;
 			Scanner sc = new Scanner(System.in);
-			
+
 			do {
 				System.out.println("Type 'end' to end the registration phase");
-//				adminInput = System.console().readLine();
 				adminInput = sc.nextLine();
 
 			} while (!adminInput.equals("end"));
 
 			sc.close();
 			master.close();
-			
+
 		}
 
 	}
@@ -86,6 +84,8 @@ public class Master {
 		// We use a concurrent hash map, since multiple threads can write on this data
 		// structure at once
 		nodes = new ConcurrentHashMap<Integer, String>();
+
+		stats = new ConcurrentHashMap<>();
 	}
 
 	private void start() {
@@ -95,15 +95,15 @@ public class Master {
 		// that states the end of the registration phase
 		// This input message, which can be submitted at any time, is handled by a separated thread
 		// N.B.: A class is needed, because we need the ability to refer "this" object (Master) in order to call this.close()
-		// 		 The same approach is used in the while loop, when we create a new MasterThread
+		// The same approach is used in the while loop, when we create a new MasterThread
 		new Thread(new ConsoleInputHandler(this)).start();
 
 		acceptNodesRegistrations();
 
-		// At this point, the admin has entered the termination string, so we can notify all the threads in the pool
+		// At this point, the admin has entered the termination string, so we can notify all the threads waiting to begin the multicast exchange
 		// so that each of them will send to their specific node, the whole map of nodes
-		synchronized (this.pool) {
-			this.pool.notifyAll();
+		synchronized (this.lock) {
+			this.lock.notifyAll();
 		}
 
 		this.pool.shutdown();
@@ -121,15 +121,13 @@ public class Master {
 
 		System.out.println("\nEvery node sent its statistics");
 
-		for(int i = 0; i < statsMap.size(); ++i) {
-			System.out.println(statsMap.get(i));
+		for (int i = 0; i < stats.size(); ++i) {
+			System.out.println(stats.get(i));
 		}
 
-		
-//		System.out.println(Workbook.getVersion());
 		String filename = "report-m-" + M + ".xls";
-		Utility.createExcel(new File(filename), statsMap);
-		
+		Utility.createExcel(filename, stats);
+
 		System.out.println(filename + " generated correctly");
 	}
 
@@ -177,17 +175,10 @@ public class Master {
 		}
 	}
 
-	public ThreadPoolExecutor getPool() {
-		return this.pool;
-	}
-
-	public Map<Integer, String> getNodes() {
-		return nodes;
-	}
-
 	public void close() {
 		try {
-			// Thanks to this close(), we go directly to this.pool.shutdown()
+			// Thanks to this close(), we generate an exception in acceptNodeRegistration
+			// so that we can go into its catch, execute a break statement and exit the while loop
 			this.mainSocket.close();
 		} catch (Exception e) {
 			e.printStackTrace();

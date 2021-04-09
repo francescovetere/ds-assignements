@@ -31,6 +31,7 @@ public class Node {
 	String registrationString = null;
 
 	private static final String PROPERTIES = "config.properties";
+	
 	// Probability of error
 	private float LP;
 
@@ -60,8 +61,9 @@ public class Node {
 	public int numResent = 0;
 	public int numReceived = 0; // N.B.: Includes numReReceived
 	public int numLost = 0;
-	public int numMissing = 0;
-	public int numReReceived = 0;
+
+	public int numMissing = 0;    // number of messages that we didn't receive correctly (0 at the end)
+	public int numReReceived = 0; // number of messages that we received thanks to a request for resend
 
 	// The map of received messages
 	// (shared by the main thread and the N-1 storing threads)
@@ -164,25 +166,16 @@ public class Node {
 
 		// We open a socket towards the master, and we send our registration message
 		try (Socket masterSocket = new Socket(MASTER_ADDR, MASTER_PORT)) {
-			// masterOs = new ObjectOutputStream(masterSocket.getOutputStream());
 
 			System.out.println("Node sends: " + registrationString + " to master");
 
-			// masterOs.writeObject(registrationString);
-			// masterOs.flush();
-
 			Utility.send(masterSocket, registrationString);
-			// masterIs = new ObjectInputStream(new BufferedInputStream(masterSocket.getInputStream()));
-
 			System.out.println("Waiting for start message from master");
-			// Object o = masterIs.readObject();
 
 			Object o = Utility.receive(masterSocket);
 
 			// We expect to receive a Map<Integer, String> (i.e.: id --> <ip, port>)
 			// If we receive something else, we terminate our execution
-			// TODO: maybe we could terminate it more gracefully (?)
-
 			if (!(o instanceof Map<?, ?>)) {
 				System.out.println("Didn't received correctly the Map of nodes");
 				System.exit(-1);
@@ -337,17 +330,10 @@ public class Node {
 					++numLost;
 
 					System.out.println("Message lost!");
-					Utility.send(sockets.get(i), null); //TODO: Forse si puo' anche non mettere?
+					// Not necessary
+					// Utility.send(sockets.get(i), null);
 				}
 			}
-
-			// ??? (N = 2, M = 30000 funziona)
-			// if (M > 10000)
-			// 	try {
-			// 		Thread.sleep(5);
-			// 	} catch (Exception e) {
-			// 		e.printStackTrace();
-			// 	}
 		}
 
 	}

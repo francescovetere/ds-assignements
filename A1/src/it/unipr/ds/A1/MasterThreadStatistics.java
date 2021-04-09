@@ -22,7 +22,7 @@ public class MasterThreadStatistics implements Runnable {
 			Statistics statistics = (Statistics) obj;
 			System.out.println("**Received termination message from Node " + statistics.nodeID);
 
-			master.statsMap.put(statistics.nodeID, statistics);
+			master.stats.put(statistics.nodeID, statistics);
 		}
 	}
 }

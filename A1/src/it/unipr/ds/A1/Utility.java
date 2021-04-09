@@ -46,8 +46,7 @@ public class Utility {
 
 	/**
 	 * Method that reads and parses a .properties file, containing the address and
-	 * the port of the master node 
-	 * TODO: Maybe this file could contain something else?
+	 * the port of the master node
 	 * 
 	 * @param properties String that identifies the properties file
 	 * @return a String, containing master_addr and master_port separated by ":"
@@ -135,12 +134,21 @@ public class Utility {
 		return obj;
 	}
 	
-	public static void createExcel(File file, Map<Integer, Statistics> map) {
+	/**
+	 * Method that creates and excel file, filling its cells with the content of the statistics
+	 * passed collected from the various nodes
+	 * @param file The name of the Excel file to be created 
+	 * @param stats The map of Statistic objects
+	 */
+	public static void createExcel(String filename, Map<Integer, Statistics> stats) {
+		File file = new File(filename);
+
+		// If a file with this filename already exists, we overwrite it
 		if(file.exists())
 			file.delete();
 			
         WritableWorkbook workbook;
-        
+		
             try {
                 workbook = Workbook.createWorkbook(file);
                 
@@ -194,14 +202,14 @@ public class Utility {
                 WritableCellFormat cellFormat = new WritableCellFormat();
                 cellFormat.setWrap(true);
 
-                for(int i = 0; i < map.size(); ++i) {
-                    Label nodeLbl = new Label(0, i+2, Integer.toString(map.get(i).nodeID), cellFormat);
-                    Label totLbl = new Label(1, i+2, Double.toString(map.get(i).totTime), cellFormat);
-                    Label avgLbl = new Label(2, i+2, Double.toString(map.get(i).avgTime), cellFormat);
-                    Label sentLbl = new Label(3, i+2, Integer.toString(map.get(i).numSent), cellFormat);
-                    Label resentLbl = new Label(4, i+2, Integer.toString(map.get(i).numResent), cellFormat);
-                    Label rcvLbl = new Label(5, i+2, Integer.toString(map.get(i).numReceived), cellFormat);
-                    Label lostLbl = new Label(6, i+2, Integer.toString(map.get(i).numLost), cellFormat);    
+                for(int i = 0; i < stats.size(); ++i) {
+                    Label nodeLbl = new Label(0, i+2, Integer.toString(stats.get(i).nodeID), cellFormat);
+                    Label totLbl = new Label(1, i+2, Double.toString(stats.get(i).totTime), cellFormat);
+                    Label avgLbl = new Label(2, i+2, Double.toString(stats.get(i).avgTime), cellFormat);
+                    Label sentLbl = new Label(3, i+2, Integer.toString(stats.get(i).numSent), cellFormat);
+                    Label resentLbl = new Label(4, i+2, Integer.toString(stats.get(i).numResent), cellFormat);
+                    Label rcvLbl = new Label(5, i+2, Integer.toString(stats.get(i).numReceived), cellFormat);
+                    Label lostLbl = new Label(6, i+2, Integer.toString(stats.get(i).numLost), cellFormat);    
                     
                     sheet.addCell(nodeLbl);
                     sheet.addCell(totLbl);
@@ -215,7 +223,6 @@ public class Utility {
                 workbook.write();
                 workbook.close();
             } catch (IOException | WriteException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
         }

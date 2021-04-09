@@ -147,7 +147,7 @@ public class NodeThreadMulticast implements Runnable {
 
 							Utility.send(nodeSocket, reqMsg);
 
-							// Scopro che un messaggio che non mi è arrivato, quindi incremento i messaggi mancanti
+							// We found that a message didn't arrive, so we increment numMissing
 							synchronized (node.lock) {
 								++node.numMissing;
 							}
