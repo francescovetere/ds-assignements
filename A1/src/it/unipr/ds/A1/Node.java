@@ -330,8 +330,6 @@ public class Node {
 					++numLost;
 
 					System.out.println("Message lost!");
-					// Not necessary
-					// Utility.send(sockets.get(i), null);
 				}
 			}
 		}
