@@ -7,22 +7,30 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Node {
-
+	
 	/**
-	* FIRST: creates the registry
 	* IDLE: waits for coordination msg
-	* CANDIDATE: wants to become coordinator, so waits for an OK from higher nodes
+	* CANDIDATE: wants to become coordinator, so send an election msg to higher nodes
+	* COORDINATOR: send coordination msg to all other nodes, and manages the resource from now on
 	* REQUESTER: asks the coordinator to access the resource
 	* WAITER: waits for the coordinator to grant the access to the resource
 	* DEAD: keeps tossing a coin until it becomes running again 
 	*/
 	private enum State {
-		FIRST, IDLE, CANDIDATE, COORDINATOR, REQUESTER, WAITER, DEAD;
+		IDLE, CANDIDATE, COORDINATOR, REQUESTER, WAITER, DEAD;
 	}
 
-	public int id;
+	// This node's id
+	private int id;
+
+	// The queue of received messages
+	private LinkedBlockingQueue<Message> msgQueue;
+
 	private State state;
 
 	// The two remote services
@@ -69,8 +77,12 @@ public class Node {
 
 		System.out.println("ID: " + this.id);
 
-		election = new ElectionImpl(this.id);
+		// The Election object will need two variables in order to reference the Node: its id and its msgQueue
+		election = new ElectionImpl(this.id, this.msgQueue);
+
 		totalNodes = new ArrayList<>();
+
+		msgQueue = new LinkedBlockingQueue<>();
 
 		registry.rebind(ELECTION_STRING + id, this.election);
 	}
@@ -79,7 +91,9 @@ public class Node {
 		while (true) {
 			System.out.println(this.state);
 			this.totalNodes = getAllNodes(id);
-
+			
+			Message m = msgQueue.poll();
+			
 			switch (this.state) {
 			case IDLE:
 				idle();
@@ -136,7 +150,8 @@ public class Node {
 		// There are other nodes with higher id
 		// So, we must wait for all their OK messages
 		else {
-			// ...
+			// if(numOK == 0) {// I'm the new coordinator }
+			// else {this.state == State.IDLE;}
 		}
 	}
 
