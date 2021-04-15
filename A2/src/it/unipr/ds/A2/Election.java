@@ -8,11 +8,11 @@ import java.rmi.RemoteException;
  */
 public interface Election extends Remote {
 	/**
-	 * Return this node's id
-	 * @return this node's id
+	 * Return this node's reference
+	 * @return this node's reference
 	 * @throws RemoteException
 	 */
-	int getId() throws RemoteException;
+	Node getNode() throws RemoteException;
 
 	/**
 	 * Receives an election message from node associated with Election object e

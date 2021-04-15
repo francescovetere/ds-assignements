@@ -1,5 +1,6 @@
 package it.unipr.ds.A2;
 
+import java.io.Serializable;
 import java.rmi.AccessException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -7,12 +8,13 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
-public class Node {
-	
+public class Node implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	/**
 	* IDLE: waits for coordination msg
 	* CANDIDATE: wants to become coordinator, so send an election msg to higher nodes
@@ -21,7 +23,7 @@ public class Node {
 	* WAITER: waits for the coordinator to grant the access to the resource
 	* DEAD: keeps tossing a coin until it becomes running again 
 	*/
-	private enum State {
+	public enum State {
 		IDLE, CANDIDATE, COORDINATOR, REQUESTER, WAITER, DEAD;
 	}
 
@@ -29,9 +31,9 @@ public class Node {
 	private int id;
 
 	// The queue of received messages
-	private LinkedBlockingQueue<Message> msgQueue;
+	public BlockingQueue<Message> msgQueue;
 
-	private State state;
+	public State state;
 
 	// The two remote services
 	private Registry registry;
@@ -42,6 +44,9 @@ public class Node {
 
 	// Constant string, useful when we lookup for other nodes
 	private final static String ELECTION_STRING = "Election-";
+
+	// Timeout for receiving an OK answer after we send an election request
+	private int OK_TIMEOUT = 1000;
 
 	public Node(int id, String nodeType) throws RemoteException {
 		this.id = id;
@@ -77,23 +82,27 @@ public class Node {
 
 		System.out.println("ID: " + this.id);
 
+		msgQueue = new LinkedBlockingQueue<Message>();
+
 		// The Election object will need two variables in order to reference the Node: its id and its msgQueue
-		election = new ElectionImpl(this.id, this.msgQueue);
+		election = new ElectionImpl(this);
 
 		totalNodes = new ArrayList<>();
-
-		msgQueue = new LinkedBlockingQueue<>();
 
 		registry.rebind(ELECTION_STRING + id, this.election);
 	}
 
 	private void start() throws AccessException, RemoteException, NotBoundException, InterruptedException {
+		this.totalNodes = getAllNodes(id);
+
+		if(this.state == State.CANDIDATE) {
+			candidate();
+		}
+
 		while (true) {
-			System.out.println(this.state);
+			System.out.println("\tState: " + this.state);
 			this.totalNodes = getAllNodes(id);
-			
-			Message m = msgQueue.poll();
-			
+
 			switch (this.state) {
 			case IDLE:
 				idle();
@@ -121,14 +130,21 @@ public class Node {
 
 	private void idle() throws InterruptedException, RemoteException {
 		System.out.println("Waiting for a coordination message");
+
+		Message msg = msgQueue.take();
+
+		if(msg.getInvokedMethod().equals(Message.InvokedMethod.COORDINATION)) {
+			System.out.println("Received a coordination message from " + msg.getRemoteNode().getId());
+			this.state = State.REQUESTER;
+		}
 	}
 
-	private void candidate() throws AccessException, RemoteException {
+	private void candidate() throws AccessException, RemoteException, InterruptedException {
 		// Send to every node with higher ID an election message
 		int sentMessages = 0;
 		for (Election e : totalNodes) {
-			if (e.getId() > this.id) {
-				System.out.println("Sending election message to " + e.getId());
+			if (e.getNode().getId() > this.id) {
+				System.out.println("Sending election message to " + e.getNode().getId());
 				e.electionMsg(this.election);
 				++sentMessages;
 			}
@@ -138,7 +154,7 @@ public class Node {
 		// I'm the node with the highest id, I have no other node to send an election msg, so I'm the coordinator
 		if (sentMessages == 0) {
 			for (Election e : totalNodes) {
-				System.out.println("Sending coordination message to " + e.getId());
+				System.out.println("Sending coordination message to " + e.getNode().getId());
 				e.coordinationMsg(this.election);
 			}
 
@@ -147,21 +163,28 @@ public class Node {
 		}
 
 		// General case:
-		// There are other nodes with higher id
-		// So, we must wait for all their OK messages
+		// There are other nodes with higher id: if one of them answers ok, we cannot be coordinators
 		else {
 			// if(numOK == 0) {// I'm the new coordinator }
 			// else {this.state == State.IDLE;}
+			for(int i = 0; i < sentMessages; ++i) {
+				Message msg = msgQueue.poll(OK_TIMEOUT, TimeUnit.MILLISECONDS);
+				if(msg != null)
+			}
+
 		}
 	}
 
 	private void coordinator() {
+		System.out.println("TODO: Manage the resource...");
 	}
 
 	private void requester() {
+		System.out.println("TODO: Requesting the resource to the coordinator...");
 	}
 
 	private void waiter() {
+		System.out.println("TODO: Wait for the coordinator to give me access to the resource...");
 	}
 
 	/**
@@ -185,6 +208,10 @@ public class Node {
 		}
 
 		return nodesList;
+	}
+
+	public int getId() {
+		return this.id;
 	}
 
 	public static void main(String[] args) throws RemoteException, NotBoundException, InterruptedException {

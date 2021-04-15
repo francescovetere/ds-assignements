@@ -23,8 +23,8 @@ public class Message implements Serializable {
 		return this.invokedMethod;
 	}
 
-	public Election getRemoteNode() {
-		return this.remoteNode;
+	public Node getRemoteNode() throws RemoteException {
+		return this.remoteNode.getNode();
 	}
 
 	@Override
@@ -47,7 +47,7 @@ public class Message implements Serializable {
 
 		int remoteNodeId = -1;
 		try {
-			remoteNodeId = this.remoteNode.getId();
+			remoteNodeId = this.remoteNode.getNode().getId();
 		} catch(RemoteException e) {
 			e.printStackTrace();
 		}
