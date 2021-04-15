@@ -22,12 +22,14 @@ public class ElectionImpl extends UnicastRemoteObject implements Election {
 
 	@Override
 	public void electionMsg(Election e) throws RemoteException {
-		
+		Message m = new Message(Message.InvokedMethod.ELECTION, e);
+		this.node.msgQueue.add(m);
 	}
 
 	@Override
 	public void okMsg(Election e) throws RemoteException {
-
+		Message m = new Message(Message.InvokedMethod.OK, e);
+		this.node.msgQueue.add(m);
 	}
 
 	@Override

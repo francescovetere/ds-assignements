@@ -133,26 +133,41 @@ public class Node implements Serializable {
 
 		Message msg = msgQueue.take();
 
+		// If we are idle and we receive a coordination message, then we can start asking the coordinator for the resource
 		if(msg.getInvokedMethod().equals(Message.InvokedMethod.COORDINATION)) {
 			System.out.println("Received a coordination message from " + msg.getRemoteNode().getId());
 			this.state = State.REQUESTER;
+		}
+
+		// If we are idle and we receive an election request, we answer ok to the sender
+		// and we candidate ourselves to become the new coordinator
+		else if(msg.getInvokedMethod().equals(Message.InvokedMethod.ELECTION)) {
+			System.out.println("Received an election message from " + msg.getRemoteNode().getId());
+			System.out.println("Answering ok to " + msg.getRemoteNode().getId());
+			
+			msg.getRemoteNode().election.okMsg(this.election);
+
+			this.state = State.CANDIDATE;
 		}
 	}
 
 	private void candidate() throws AccessException, RemoteException, InterruptedException {
 		// Send to every node with higher ID an election message
-		int sentMessages = 0;
 		for (Election e : totalNodes) {
 			if (e.getNode().getId() > this.id) {
 				System.out.println("Sending election message to " + e.getNode().getId());
 				e.electionMsg(this.election);
-				++sentMessages;
 			}
 		}
 
-		// Trivial case:
-		// I'm the node with the highest id, I have no other node to send an election msg, so I'm the coordinator
-		if (sentMessages == 0) {
+		// If there are other nodes with higher id and one of them answers OK, we cannot be coordinators
+		// But, if no one answer in a certain timeout (e.g.: because I'm the node with the highest id) we can be the coordinators
+		Thread.sleep(OK_TIMEOUT);
+
+		Message msg = msgQueue.poll();
+
+		// If we didn't receive any message at all, or we received something different from OK, then we can be coordinators
+		if (msg == null || !msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			for (Election e : totalNodes) {
 				System.out.println("Sending coordination message to " + e.getNode().getId());
 				e.coordinationMsg(this.election);
@@ -160,18 +175,6 @@ public class Node implements Serializable {
 
 			System.out.println("I'm the new coordinator");
 			this.state = State.COORDINATOR;
-		}
-
-		// General case:
-		// There are other nodes with higher id: if one of them answers ok, we cannot be coordinators
-		else {
-			// if(numOK == 0) {// I'm the new coordinator }
-			// else {this.state == State.IDLE;}
-			for(int i = 0; i < sentMessages; ++i) {
-				Message msg = msgQueue.poll(OK_TIMEOUT, TimeUnit.MILLISECONDS);
-				if(msg != null)
-			}
-
 		}
 	}
 
