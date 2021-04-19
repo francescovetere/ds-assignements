@@ -246,6 +246,17 @@ public class Node implements Serializable {
 		Message msg = msgQueue.poll(); // TODO: take() ?
 
 		checkQueue(msg);
+
+		//I there is at least one Node waiting for the resource, and the resource's available, 
+		// grant access and set 'resourceAvailable' to false
+		if( resourceAvailable & (waitingNodes.size() > 0) ) {
+			MutualExclusion me = waitingNodes.take();
+			me.grantMsg(this.mutualExclusion);
+
+			resourceAvailable = false;
+		}
+
+
 	}
 
 	private void requester() throws RemoteException {
@@ -401,12 +412,6 @@ public class Node implements Serializable {
 
 			waitingNodes.add(msg.getRemoteNode().mutualExclusion);
 
-			if(resourceAvailable) {
-				MutualExclusion me = waitingNodes.poll();
-				me.grantMsg(this.mutualExclusion);
-			}
-
-			resourceAvailable = false;
 		}
 
 		// If arrives a grant message
@@ -435,6 +440,7 @@ public class Node implements Serializable {
 
 	private void useResource() throws RemoteException, InterruptedException {
 		// do something...
+		System.out.println("***I'm working with the resource!***");
 		Thread.sleep(5000);
 
 		this.currentCoordinator.freeMsg(this.mutualExclusion);
