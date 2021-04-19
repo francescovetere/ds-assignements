@@ -12,8 +12,6 @@ import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import javax.lang.model.util.ElementScanner6;
-
 public class Node implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -35,14 +33,23 @@ public class Node implements Serializable {
 	// The queue of received messages
 	public BlockingQueue<Message> msgQueue;
 
+	// The list of nodes waiting to access the resource
+	public List<Message> waitingNodes;
+
 	public State state;
 
-	// The two remote services
 	private Registry registry;
-	private Election election;
 
-	// Constant string, useful when we lookup for other nodes
+	// The two remote services
+	private Election election;
+	private MutualExclusion mutualExclusion;
+
+	// Reference to the current coordinator
+	private MutualExclusion currentCoordinator;
+
+	// Constant strings, useful when we lookup for other nodes
 	private final static String ELECTION_STRING = "Election-";
+	private final static String MUTUAL_EXCLUSION_STRING = "MutualExclusion-";
 
 	private int TIMEOUT_OK = 1000; // Timeout for receiving an OK answer after we send an election request
 	private int TIMEOUT_WHILE = 500; // Timeout between two while iterations
@@ -91,11 +98,13 @@ public class Node implements Serializable {
 		System.out.println("ID: " + this.id);
 
 		msgQueue = new LinkedBlockingQueue<Message>();
+		waitingNodes = new ArrayList<>();
 
-		// The Election object will need the reference to Node
 		election = new ElectionImpl(this);
+		mutualExclusion = new MutualExclusionImpl(this);
 
 		registry.rebind(ELECTION_STRING + id, this.election);
+		registry.rebind(MUTUAL_EXCLUSION_STRING + id, this.mutualExclusion);
 	}
 
 	private void start() throws AccessException, RemoteException, NotBoundException, InterruptedException {
@@ -104,6 +113,7 @@ public class Node implements Serializable {
 		}
 
 		while (true) {
+
 			// Sleep it's totally useless once we implement a sort of synchronization mechaism
 			// e.g.: a blocking queue of messages
 			Thread.sleep(TIMEOUT_WHILE);
@@ -190,8 +200,8 @@ public class Node implements Serializable {
 		// Send to every node with higher ID an election message
 		for (Election e : getAllCandidates(this.id)) {
 			// if (e.getNode().getId() > this.id) {
-				System.out.println("Sending election message to " + e.getNode().getId());
-				e.electionMsg(this.election);
+			System.out.println("Sending election message to " + e.getNode().getId());
+			e.electionMsg(this.election);
 			// }
 		}
 
@@ -204,7 +214,7 @@ public class Node implements Serializable {
 		// boolean arrivesOK = msg.getInvokedMethod().equals(Message.InvokedMethod.OK);
 
 		// If we didn't receive any message at all, or we received something different from OK, then we can be coordinators
-		if (msg==null || !msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
+		if (msg == null || !msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			for (Election e : getAllNodes(this.id)) {
 				System.out.println("Sending coordination message to " + e.getNode().getId());
 				e.coordinationMsg(this.election);
@@ -231,8 +241,12 @@ public class Node implements Serializable {
 	}
 
 	private void requester() throws AccessException, RemoteException, InterruptedException, NotBoundException {
-		System.out.println("TODO: Requesting the resource to the coordinator...");
+		System.out.println("Requesting the resource to the coordinator...");
 
+		this.currentCoordinator.requestMsg(this.mutualExclusion);
+		this.state = State.WAITER;
+
+		// TODO: Following code goes in waiter() ? 
 		Message msg = msgQueue.poll(); // TODO: take() ?
 
 		// Make a check on the type of Message and handle the change of State 
@@ -300,7 +314,8 @@ public class Node implements Serializable {
 	 * @throws InterruptedException
 	 * @throws NotBoundException
 	 */
-	public void checkQueue(Message msg) throws AccessException, RemoteException, InterruptedException, NotBoundException {
+	public void checkQueue(Message msg)
+			throws AccessException, RemoteException, InterruptedException, NotBoundException {
 
 		if (msg == null) {
 			return;
@@ -312,6 +327,7 @@ public class Node implements Serializable {
 
 			// If I received a coordination message from a higher node, I recognize this new node as the new coordinator
 			if (msg.getRemoteNode().getId() > this.id) {
+				this.currentCoordinator = msg.getRemoteNode().mutualExclusion;
 				this.state = State.REQUESTER;
 			}
 			// Else I received one from a lower node, in this case I resend a coordination message
@@ -366,6 +382,11 @@ public class Node implements Serializable {
 	 */
 	private void clearState() {
 		this.msgQueue.clear();
+		this.waitingNodes.clear();
+	}
+
+	public boolean isCoordinator() {
+		return this.state.equals(State.COORDINATOR);
 	}
 
 	public int getId() {
