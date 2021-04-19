@@ -16,13 +16,12 @@ public class Node implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	/**
-	* IDLE: waits for coordination msg
-	* CANDIDATE: wants to become coordinator, so send an election msg to higher nodes
-	* COORDINATOR: send coordination msg to all other nodes, and manages the resource from now on
-	* REQUESTER: asks the coordinator to access the resource
-	* WAITER: waits for the coordinator to grant the access to the resource
-	* DEAD: flips a coin until it becomes running again
-	*/
+	 * IDLE: waits for coordination msg CANDIDATE: wants to become coordinator, so
+	 * send an election msg to higher nodes COORDINATOR: send coordination msg to
+	 * all other nodes, and manages the resource from now on REQUESTER: asks the
+	 * coordinator to access the resource WAITER: waits for the coordinator to grant
+	 * the access to the resource DEAD: flips a coin until it becomes running again
+	 */
 	public enum State {
 		IDLE, CANDIDATE, COORDINATOR, REQUESTER, WAITER, DEAD;
 	}
@@ -33,8 +32,8 @@ public class Node implements Serializable {
 	// The queue of received messages
 	public BlockingQueue<Message> msgQueue;
 
-	// The list of nodes waiting to access the resource
-	public List<Message> waitingNodes;
+	// The queue of nodes waiting to access the resource
+	public BlockingQueue<MutualExclusion> waitingNodes;
 
 	public State state;
 
@@ -54,8 +53,11 @@ public class Node implements Serializable {
 	private int TIMEOUT_OK = 1000; // Timeout for receiving an OK answer after we send an election request
 	private int TIMEOUT_WHILE = 500; // Timeout between two while iterations
 
-	private static final double H = 0.03;
-	private static final double K = 0.05;
+	private static final double H = 0.003;
+	private static final double K = 0.005;
+
+	private Object resource;
+	private boolean resourceAvailable = true;
 
 	private Random random;
 
@@ -82,7 +84,8 @@ public class Node implements Serializable {
 		}
 
 		// Last node: gets the registry and set its state to CANDIDATE
-		// It doesn't even start a Bully execution, because he is obviously the coordinator
+		// It doesn't even start a Bully execution, because he is obviously the
+		// coordinator
 		else if (nodeType.equals("l")) {
 			System.out.println("Last node");
 
@@ -97,8 +100,8 @@ public class Node implements Serializable {
 
 		System.out.println("ID: " + this.id);
 
-		msgQueue = new LinkedBlockingQueue<Message>();
-		waitingNodes = new ArrayList<>();
+		msgQueue = new LinkedBlockingQueue<>();
+		waitingNodes = new LinkedBlockingQueue<>();
 
 		election = new ElectionImpl(this);
 		mutualExclusion = new MutualExclusionImpl(this);
@@ -114,7 +117,8 @@ public class Node implements Serializable {
 
 		while (true) {
 
-			// Sleep it's totally useless once we implement a sort of synchronization mechaism
+			// Sleep it's totally useless once we implement a sort of synchronization
+			// mechaism
 			// e.g.: a blocking queue of messages
 			Thread.sleep(TIMEOUT_WHILE);
 
@@ -148,7 +152,7 @@ public class Node implements Serializable {
 			double flippedCoin = this.random.nextDouble();
 			// System.out.println("Flipped coin: " + flippedCoin);
 
-			// I'm alive and I die 
+			// I'm alive and I die
 			if ((this.state != State.DEAD) && (flippedCoin < H)) {
 				System.out.println("\t\t***Node is dead***");
 				this.state = State.DEAD;
@@ -163,24 +167,24 @@ public class Node implements Serializable {
 				this.state = State.CANDIDATE;
 				// List<Election> candidates = getAllCandidates(this.id);
 
-				// //There's no candidate, so I'm automatically the new Coordinator 
+				// //There's no candidate, so I'm automatically the new Coordinator
 				// if (candidates.size() == 0) {
-				// 	this.state = State.COORDINATOR;
+				// this.state = State.COORDINATOR;
 
-				// 	for (Election e : getAllNodes(this.id)) {
-				// 		System.out.println("Sending coordination message to " + e.getNode().getId());
-				// 		e.coordinationMsg(this.election);
-				// 	}
+				// for (Election e : getAllNodes(this.id)) {
+				// System.out.println("Sending coordination message to " + e.getNode().getId());
+				// e.coordinationMsg(this.election);
+				// }
 
 				// } else {
-				// 	this.state = State.CANDIDATE;
+				// this.state = State.CANDIDATE;
 
-				// 	for (Election e : getAllNodes(this.id)) {
-				// 		if (e.getNode().getId() > this.id) {
-				// 			System.out.println("Sending election message to " + e.getNode().getId());
-				// 			e.electionMsg(this.election);
-				// 		}
-				// 	}
+				// for (Election e : getAllNodes(this.id)) {
+				// if (e.getNode().getId() > this.id) {
+				// System.out.println("Sending election message to " + e.getNode().getId());
+				// e.electionMsg(this.election);
+				// }
+				// }
 				// }
 
 			}
@@ -192,7 +196,7 @@ public class Node implements Serializable {
 
 		Message msg = msgQueue.poll(); // TODO: take() ?
 
-		// Make a check on the type of Message and handle the change of State 
+		// Make a check on the type of Message and handle the change of State
 		checkQueue(msg);
 	}
 
@@ -205,15 +209,18 @@ public class Node implements Serializable {
 			// }
 		}
 
-		// If there are other nodes with higher id and one of them answers OK, we cannot be coordinators
-		// But, if no one answer in a certain timeout (e.g.: because I'm the node with the highest id) we can be the coordinators
+		// If there are other nodes with higher id and one of them answers OK, we cannot
+		// be coordinators
+		// But, if no one answer in a certain timeout (e.g.: because I'm the node with
+		// the highest id) we can be the coordinators
 		Thread.sleep(TIMEOUT_OK);
 
 		Message msg = msgQueue.poll();
 
 		// boolean arrivesOK = msg.getInvokedMethod().equals(Message.InvokedMethod.OK);
 
-		// If we didn't receive any message at all, or we received something different from OK, then we can be coordinators
+		// If we didn't receive any message at all, or we received something different
+		// from OK, then we can be coordinators
 		if (msg == null || !msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			for (Election e : getAllNodes(this.id)) {
 				System.out.println("Sending coordination message to " + e.getNode().getId());
@@ -225,7 +232,8 @@ public class Node implements Serializable {
 			System.out.println("I'm the new coordinator");
 			this.state = State.COORDINATOR;
 		}
-		// If arrives an OK message, we return to IDLE state waiting for the new coordinator
+		// If arrives an OK message, we return to IDLE state waiting for the new
+		// coordinator
 		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			this.state = State.IDLE;
 		}
@@ -233,32 +241,35 @@ public class Node implements Serializable {
 	}
 
 	private void coordinator() throws AccessException, RemoteException, InterruptedException, NotBoundException {
-		System.out.println("TODO: Manage the resource...");
+		System.out.println("Manage the resource...");
 
-		Message msg = msgQueue.take(); // TODO: take() ?
+		Message msg = msgQueue.poll(); // TODO: take() ?
 
 		checkQueue(msg);
 	}
 
-	private void requester() throws AccessException, RemoteException, InterruptedException, NotBoundException {
+	private void requester() throws RemoteException {
+		// TODO: Attendo un tempo random...
+
 		System.out.println("Requesting the resource to the coordinator...");
 
 		this.currentCoordinator.requestMsg(this.mutualExclusion);
 		this.state = State.WAITER;
+	}
 
-		// TODO: Following code goes in waiter() ? 
-		Message msg = msgQueue.poll(); // TODO: take() ?
+	private void waiter() throws AccessException, RemoteException, InterruptedException, NotBoundException {
+		System.out.println("Wait for the coordinator to give me access to the resource...");
 
-		// Make a check on the type of Message and handle the change of State 
+		Message msg = msgQueue.poll();
+
+		// Make a check on the type of Message and handle the change of State
 		checkQueue(msg);
 	}
 
-	private void waiter() {
-		System.out.println("TODO: Wait for the coordinator to give me access to the resource...");
-	}
-
 	/**
-	 * Method that retrieves all the nodes currently registered to the registry, except for the current one
+	 * Method that retrieves all the nodes currently registered to the registry,
+	 * except for the current one
+	 * 
 	 * @param id The id of the current node that requests the list of all nodes
 	 * @return The list of all nodes, except the one that invoked the method
 	 * @throws RemoteException
@@ -282,6 +293,7 @@ public class Node implements Serializable {
 
 	/**
 	 * Method that retrieves all the possibly candidates nodes
+	 * 
 	 * @param id The id of the current node that requests the list of candidates
 	 * @return The list of all nodes, except the one that invoked the method
 	 * @throws RemoteException
@@ -304,11 +316,11 @@ public class Node implements Serializable {
 	}
 
 	/**
-	 * Method for taking the correct decision after extracting a message from the message queue,
-	 * being in a certain state
+	 * Method for taking the correct decision after extracting a message from the
+	 * message queue, being in a certain state
 	 * 
 	 * @param state The current state
-	 * @param msg The message extracted from the FIFO message queue
+	 * @param msg   The message extracted from the FIFO message queue
 	 * @throws AccessException
 	 * @throws RemoteException
 	 * @throws InterruptedException
@@ -321,16 +333,20 @@ public class Node implements Serializable {
 			return;
 		}
 
-		// If we are idle and we receive a coordination message, then we can start asking the coordinator for the resource
+		// If we are idle and we receive a coordination message, then we can start
+		// asking the coordinator for the resource
 		if (msg.getInvokedMethod().equals(Message.InvokedMethod.COORDINATION)) {
 			System.out.println("Received a coordination message from " + msg.getRemoteNode().getId());
 
-			// If I received a coordination message from a higher node, I recognize this new node as the new coordinator
+			// If I received a coordination message from a higher node, I recognize this new
+			// node as the new coordinator
 			if (msg.getRemoteNode().getId() > this.id) {
 				this.currentCoordinator = msg.getRemoteNode().mutualExclusion;
 				this.state = State.REQUESTER;
 			}
-			// Else I received one from a lower node, in this case I resend a coordination message
+
+			// Else I received one from a lower node, in this case I resend a coordination
+			// message
 			else {
 				// TODO
 				System.out.println("\n\n\n*** SOMETHING IS WRONG ***\n\n\n");
@@ -348,7 +364,8 @@ public class Node implements Serializable {
 		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.ELECTION)) {
 			System.out.println("Received an election message from " + msg.getRemoteNode().getId());
 
-			// If I received an election request from a lower node, I answer OK to it and I set myself to candidate
+			// If I received an election request from a lower node, I answer OK to it and I
+			// set myself to candidate
 			if (msg.getRemoteNode().getId() < this.id) {
 				System.out.println("Answering ok to " + msg.getRemoteNode().getId());
 
@@ -357,22 +374,53 @@ public class Node implements Serializable {
 				msg.getRemoteNode().election.okMsg(this.election);
 			}
 
-			// Else, if the election request was sent by a higher node, I ignore it and I wait again for a coordinator
+			// Else, if the election request was sent by a higher node, I ignore it and I
+			// wait again for a coordinator
 			else {
 				this.state = State.IDLE;
 			}
 		}
 
-		// If arrives an OK message, we return to IDLE state waiting for the new coordinator
+		// If arrives an OK message, we return to IDLE state waiting for the new
+		// coordinator
 		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			System.out.println("Received an OK message from " + msg.getRemoteNode().getId());
 
-			// If I received an OK message from a higher node, I cannot be coordinator anymore
+			// If I received an OK message from a higher node, I cannot be coordinator
+			// anymore
 			if (msg.getRemoteNode().getId() > this.id) {
 				this.state = State.IDLE;
 			}
 
 			// Else, if the OK message was sent by a lower node, I ignore it
+		}
+
+		// If arrives a request message
+		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.REQUEST)) {
+			System.out.println("Received a request message from " + msg.getRemoteNode().getId());
+
+			waitingNodes.add(msg.getRemoteNode().mutualExclusion);
+
+			if(resourceAvailable) {
+				MutualExclusion me = waitingNodes.poll();
+				me.grantMsg(this.mutualExclusion);
+			}
+
+			resourceAvailable = false;
+		}
+
+		// If arrives a grant message
+		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.GRANT)) {
+			System.out.println("Received a grant message from " + msg.getRemoteNode().getId());
+
+			useResource();
+		}
+
+		// If arrives a free message
+		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.FREE)) {
+			System.out.println("Received a free message from " + msg.getRemoteNode().getId());
+
+			freeResource();
 		}
 
 	}
@@ -385,8 +433,17 @@ public class Node implements Serializable {
 		this.waitingNodes.clear();
 	}
 
-	public boolean isCoordinator() {
-		return this.state.equals(State.COORDINATOR);
+	private void useResource() throws RemoteException, InterruptedException {
+		// do something...
+		Thread.sleep(5000);
+
+		this.currentCoordinator.freeMsg(this.mutualExclusion);
+
+		this.state = State.REQUESTER;
+	}
+
+	private void freeResource() throws RemoteException, InterruptedException {
+		resourceAvailable = true;
 	}
 
 	public int getId() {
