@@ -1,20 +1,22 @@
 package it.unipr.ds.A2;
 
 import java.io.Serializable;
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 public class Message implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	public enum InvokedMethod {
-		ELECTION, OK, COORDINATION;
+		ELECTION, OK, COORDINATION, // election
+		REQUEST, GRANT, FREE; // mutual exclusion	
 	}
 
 	private InvokedMethod invokedMethod;
 
-	private Election remoteNode;
+	private Remote remoteNode;
 
-	public Message(InvokedMethod invokedMethod, Election remoteNode) {
+	public Message(InvokedMethod invokedMethod, Remote remoteNode) {
 		this.invokedMethod = invokedMethod;
 		this.remoteNode = remoteNode;
 	}
@@ -24,7 +26,15 @@ public class Message implements Serializable {
 	}
 
 	public Node getRemoteNode() throws RemoteException {
-		return this.remoteNode.getNode();
+		if(remoteNode instanceof Election) {
+			return ((Election) remoteNode).getNode();
+		}
+
+		else if(remoteNode instanceof MutualExclusion) {
+			return ((MutualExclusion) remoteNode).getNode();
+		}
+
+		else return null;
 	}
 
 	@Override
@@ -41,14 +51,22 @@ public class Message implements Serializable {
 		case COORDINATION:
 			invokedMethodString = "COORDINATION";
 			break;
-		default:
+		case REQUEST:
+			invokedMethodString = "REQUEST";
 			break;
+		case GRANT:
+			invokedMethodString = "GRANT";
+			break;
+		case FREE:
+			invokedMethodString = "FREE";
+			break;
+		default:
 		}
 
 		int remoteNodeId = -1;
 		try {
-			remoteNodeId = this.remoteNode.getNode().getId();
-		} catch(RemoteException e) {
+			remoteNodeId = this.getRemoteNode().getId();
+		} catch (RemoteException e) {
 			e.printStackTrace();
 		}
 
