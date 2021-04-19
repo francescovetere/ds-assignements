@@ -12,6 +12,8 @@ import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import javax.lang.model.util.ElementScanner6;
+
 public class Node implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -45,8 +47,8 @@ public class Node implements Serializable {
 	private int TIMEOUT_OK = 1000; // Timeout for receiving an OK answer after we send an election request
 	private int TIMEOUT_WHILE = 500; // Timeout between two while iterations
 
-	private static final double H = 0.3;
-	private static final double K = 0.5;
+	private static final double H = 0.03;
+	private static final double K = 0.05;
 
 	private Random random;
 
@@ -175,7 +177,7 @@ public class Node implements Serializable {
 		}
 	}
 
-	private void idle() throws InterruptedException, RemoteException {
+	private void idle() throws InterruptedException, RemoteException, NotBoundException {
 		System.out.println("Waiting for a coordination message");
 
 		Message msg = msgQueue.poll(); // TODO: take() ?
@@ -202,11 +204,13 @@ public class Node implements Serializable {
 		// boolean arrivesOK = msg.getInvokedMethod().equals(Message.InvokedMethod.OK);
 
 		// If we didn't receive any message at all, or we received something different from OK, then we can be coordinators
-		if (msg == null || !msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
+		if (msg==null || !msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			for (Election e : getAllNodes(this.id)) {
 				System.out.println("Sending coordination message to " + e.getNode().getId());
 				e.coordinationMsg(this.election);
 			}
+
+			clearState();
 
 			System.out.println("I'm the new coordinator");
 			this.state = State.COORDINATOR;
@@ -215,17 +219,18 @@ public class Node implements Serializable {
 		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
 			this.state = State.IDLE;
 		}
+
 	}
 
-	private void coordinator() throws AccessException, RemoteException, InterruptedException {
+	private void coordinator() throws AccessException, RemoteException, InterruptedException, NotBoundException {
 		System.out.println("TODO: Manage the resource...");
 
-		Message msg = msgQueue.poll(); // TODO: take() ?
+		Message msg = msgQueue.take(); // TODO: take() ?
 
 		checkQueue(msg);
 	}
 
-	private void requester() throws AccessException, RemoteException, InterruptedException {
+	private void requester() throws AccessException, RemoteException, InterruptedException, NotBoundException {
 		System.out.println("TODO: Requesting the resource to the coordinator...");
 
 		Message msg = msgQueue.poll(); // TODO: take() ?
@@ -293,8 +298,9 @@ public class Node implements Serializable {
 	 * @throws AccessException
 	 * @throws RemoteException
 	 * @throws InterruptedException
+	 * @throws NotBoundException
 	 */
-	public void checkQueue(Message msg) throws AccessException, RemoteException, InterruptedException {
+	public void checkQueue(Message msg) throws AccessException, RemoteException, InterruptedException, NotBoundException {
 
 		if (msg == null) {
 			return;
@@ -308,10 +314,16 @@ public class Node implements Serializable {
 			if (msg.getRemoteNode().getId() > this.id) {
 				this.state = State.REQUESTER;
 			}
-
+			// Else I received one from a lower node, in this case I resend a coordination message
 			else {
 				// TODO
 				System.out.println("\n\n\n*** SOMETHING IS WRONG ***\n\n\n");
+
+				for (Election e : getAllNodes(this.id)) {
+					System.out.println("Sending coordination message to " + e.getNode().getId());
+					e.coordinationMsg(this.election);
+				}
+
 			}
 		}
 
