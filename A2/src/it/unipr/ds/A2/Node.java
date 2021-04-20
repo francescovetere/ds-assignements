@@ -56,7 +56,15 @@ public class Node implements Serializable {
 	private static final double H = 0.003;
 	private static final double K = 0.005;
 
-	private Object resource;
+	// Node is waiting for a coordination message
+	private static final int IDLEATTEMPTS = 30;
+	// Node is waiting for becoming the coordinator
+	private static final int CANDIDATEATTEMPTS = 10;
+	// Node is waiting for a grant message
+	private static final int WAITERATTEMPTS = 10;
+	// Coordinator is waiting for a free message
+	private static final int COORDINATORATTEMPTS = 10;
+
 	private boolean resourceAvailable = true;
 
 	private Random random;
@@ -243,19 +251,18 @@ public class Node implements Serializable {
 	private void coordinator() throws AccessException, RemoteException, InterruptedException, NotBoundException {
 		System.out.println("Manage the resource...");
 
-		Message msg = msgQueue.poll(); // TODO: take() ?
+		Message msg = msgQueue.poll();
 
 		checkQueue(msg);
 
-		//I there is at least one Node waiting for the resource, and the resource's available, 
+		// If there is at least one Node waiting for the resource, and the resource's available, 
 		// grant access and set 'resourceAvailable' to false
-		if( resourceAvailable & (waitingNodes.size() > 0) ) {
-			MutualExclusion me = waitingNodes.take();
-			me.grantMsg(this.mutualExclusion);
+		if (resourceAvailable && (waitingNodes.size() > 0)) {
+			MutualExclusion nextRequester = waitingNodes.take();
+			nextRequester.grantMsg(this.mutualExclusion);
 
 			resourceAvailable = false;
 		}
-
 
 	}
 
