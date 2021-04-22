@@ -33,13 +33,16 @@ public class Node implements Serializable {
 	public BlockingQueue<Message> msgQueue;
 
 	// The queue of nodes waiting to access the resource
+	// obviously, this queue has only meaning if this node is the current coordinator
 	public BlockingQueue<MutualExclusion> waitingNodes;
 
-	public State state;
+	// The state in which this current node is
+	private State state;
 
+	// The global RMI registry
 	private Registry registry;
 
-	// The two remote services
+	// The two remote services exposed by this node
 	private Election election;
 	private MutualExclusion mutualExclusion;
 
@@ -50,11 +53,12 @@ public class Node implements Serializable {
 	private final static String ELECTION_STRING = "Election-";
 	private final static String MUTUAL_EXCLUSION_STRING = "MutualExclusion-";
 
-	private int TIMEOUT_WHILE = 3000; // Timeout between two while iterations
+	// Timeout between two while iterations, just to slow down the execution
+	private int TIMEOUT_WHILE = 3000;
 
-	// probability of dying
+	// Probability of dying
 	private static final double H = 0.001;
-	// probability of resuscitate
+	// Probability of resuscitate
 	private static final double K = 0.005;
 
 	// Useful counter that manages timeouts
@@ -63,21 +67,23 @@ public class Node implements Serializable {
 	// Node is waiting for a coordination message
 	private static final int IDLEATTEMPTS = 30;
 	// Node is waiting for becoming the coordinator
-	private static final int CANDIDATEATTEMPTS = 3;
+	private static final int CANDIDATEATTEMPTS = 10;
 	// Node is waiting for a grant message
 	private static final int WAITERATTEMPTS = 10;
 	// Coordinator is waiting for a free message
 	private static final int COORDINATORATTEMPTS = 3;
 
+	// Critical section variables
 	private boolean resourceAvailable = true;
 	private Node inCriticalSection = null;
 
+	// Random generator
 	private Random random;
 
 	// Toggle for printing verbose output
 	private boolean verbose = true;
 
-	public Node(int id, String nodeType) throws RemoteException {
+	public Node(final int id, final String nodeType) throws RemoteException {
 		this.id = id;
 		this.random = new Random();
 
@@ -92,6 +98,7 @@ public class Node implements Serializable {
 		// Intermediate node: gets the registry and set its state to IDLE
 		else if (nodeType.equals("i")) {
 			System.out.println("Intermediate node");
+
 			this.registry = LocateRegistry.getRegistry();
 			this.state = State.IDLE;
 		}
@@ -104,6 +111,9 @@ public class Node implements Serializable {
 
 			this.registry = LocateRegistry.getRegistry();
 			this.state = State.CANDIDATE;
+
+			// Trick for avoiding the first election and directly set this node as coordinator
+			this.attempts = CANDIDATEATTEMPTS;
 		}
 
 		else {
@@ -124,10 +134,6 @@ public class Node implements Serializable {
 	}
 
 	private void start() throws AccessException, RemoteException, NotBoundException, InterruptedException {
-		if (this.state == State.CANDIDATE) {
-			coordinator();
-		}
-
 		while (true) {
 			// Just to slow down the execution
 			Thread.sleep(TIMEOUT_WHILE);
@@ -172,32 +178,11 @@ public class Node implements Serializable {
 			// I'm dead and I return alive
 			else if ((this.state == State.DEAD) && (flippedCoin < K)) {
 				System.out.println("\t\t***Node has restarted***");
+
 				// In any case, if I'm turned back alive, I reset my internal state
 				this.clearState();
 
 				this.state = State.CANDIDATE;
-				// List<Election> candidates = getAllCandidates(this.id);
-
-				// //There's no candidate, so I'm automatically the new Coordinator
-				// if (candidates.size() == 0) {
-				// this.state = State.COORDINATOR;
-
-				// for (Election e : getAllNodes(this.id)) {
-				// System.out.println("Sending coordination message to " + e.getNode().getId());
-				// e.coordinationMsg(this.election);
-				// }
-
-				// } else {
-				// this.state = State.CANDIDATE;
-
-				// for (Election e : getAllNodes(this.id)) {
-				// if (e.getNode().getId() > this.id) {
-				// System.out.println("Sending election message to " + e.getNode().getId());
-				// e.electionMsg(this.election);
-				// }
-				// }
-				// }
-
 			}
 		}
 	}
@@ -215,20 +200,20 @@ public class Node implements Serializable {
 
 				System.out.println("***I recognized that coordinator is dead, so I start an election***");
 
-				for (Election e : getAllNodes(this.id)) {
+				for (Election e : getAllCandidates(this.id)) {
 					e.electionMsg(this.election);
 				}
 			}
 		}
 
-		// Make a check on the type of Message and handle the change of State
 		else {
-			checkQueue(msg);
+			checkMessage(msg);
 		}
 	}
 
 	private void candidate() throws AccessException, RemoteException, InterruptedException, NotBoundException {
 		System.out.println("Candidating...");
+
 		Message msg = msgQueue.poll();
 
 		if (msg == null) {
@@ -238,7 +223,7 @@ public class Node implements Serializable {
 
 				this.state = State.COORDINATOR;
 
-				System.out.println("***None answered me \"OK\", so I'm the new coordinator***");
+				System.out.println("***I'm the new coordinator***");
 
 				for (Election e : getAllNodes(this.id)) {
 					e.coordinationMsg(this.election);
@@ -247,7 +232,7 @@ public class Node implements Serializable {
 		}
 
 		else {
-			checkQueue(msg);
+			checkMessage(msg);
 		}
 	}
 
@@ -270,7 +255,7 @@ public class Node implements Serializable {
 		}
 
 		else {
-			checkQueue(msg);
+			checkMessage(msg);
 		}
 
 		// If there is at least one Node waiting for the resource, and the resource's available, 
@@ -285,8 +270,9 @@ public class Node implements Serializable {
 
 	}
 
-	private void requester() throws RemoteException {
-		// TODO: Attendo un tempo random...
+	private void requester() throws RemoteException, InterruptedException {
+		// Wait up to 5 seconds before submitting a new request to the coordinator
+		Thread.sleep(random.nextInt(6) * 1000);
 
 		System.out.println("Requesting the resource to the coordinator...");
 
@@ -315,9 +301,8 @@ public class Node implements Serializable {
 			}
 		}
 
-		// Make a check on the type of Message and handle the change of State
 		else {
-			checkQueue(msg);
+			checkMessage(msg);
 		}
 	}
 
@@ -372,25 +357,24 @@ public class Node implements Serializable {
 
 	/**
 	 * Method for taking the correct decision after extracting a message from the
-	 * message queue, being in a certain state
+	 * FIFO message queue
 	 * 
-	 * @param state The current state
-	 * @param msg   The message extracted from the FIFO message queue
+	 * @param msg The message extracted from the FIFO message queue
 	 * @throws AccessException
 	 * @throws RemoteException
 	 * @throws InterruptedException
 	 * @throws NotBoundException
 	 */
-	public void checkQueue(Message msg)
+	private void checkMessage(final Message msg)
 			throws AccessException, RemoteException, InterruptedException, NotBoundException {
 
-		if (msg == null) {
+		if (msg == null)
 			return;
-		}
 
-		// If we are idle and we receive a coordination message, then we can start
-		// asking the coordinator for the resource
-		if (msg.getInvokedMethod().equals(Message.InvokedMethod.COORDINATION)) {
+		switch (msg.getInvokedMethod()) {
+		case COORDINATION:
+			// If we are idle and we receive a coordination message, then we can start
+			// asking the coordinator for the resource
 			System.out.println("Received a coordination message from " + msg.getRemoteNode().getId());
 
 			this.attempts = 0;
@@ -411,11 +395,11 @@ public class Node implements Serializable {
 				}
 
 			}
-		}
+			break;
 
 		// If we receive an election request, we answer ok to the sender
 		// and we candidate ourselves to become the new coordinator
-		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.ELECTION)) {
+		case ELECTION:
 			System.out.println("Received an election message from " + msg.getRemoteNode().getId());
 
 			this.attempts = 0;
@@ -437,11 +421,11 @@ public class Node implements Serializable {
 			else {
 				this.state = State.IDLE;
 			}
-		}
+			break;
 
-		// If arrives an OK message, we return to IDLE state waiting for the new
-		// coordinator
-		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.OK)) {
+		case OK:
+			// If arrives an OK message, we return to IDLE state waiting for the new
+			// coordinator
 			System.out.println("Received an OK message from " + msg.getRemoteNode().getId());
 
 			this.attempts = 0;
@@ -453,17 +437,15 @@ public class Node implements Serializable {
 			}
 
 			// Else, if the OK message was sent by a lower node, I ignore it
-		}
+			break;
 
 		// If arrives a request message
-		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.REQUEST)) {
+		case REQUEST:
 			System.out.println("Received a request message from " + msg.getRemoteNode().getId());
 
 			waitingNodes.add(msg.getRemoteNode().mutualExclusion);
-		}
-
-		// If arrives a grant message
-		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.GRANT)) {
+			break;
+		case GRANT:
 			System.out.println("Received a grant message from " + msg.getRemoteNode().getId());
 
 			this.attempts = 0;
@@ -472,15 +454,15 @@ public class Node implements Serializable {
 
 			this.currentCoordinator.freeMsg(this.mutualExclusion);
 			this.state = State.REQUESTER;
-		}
+			break;
 
-		// If arrives a free message
-		else if (msg.getInvokedMethod().equals(Message.InvokedMethod.FREE)) {
+		case FREE:
 			System.out.println("Received a free message from " + msg.getRemoteNode().getId());
 
 			freeResource();
-		}
+			break;
 
+		}
 	}
 
 	/**
@@ -492,6 +474,11 @@ public class Node implements Serializable {
 		this.attempts = 0;
 	}
 
+	/**
+	 * Method runned by the current node in the critical section
+	 * @throws RemoteException
+	 * @throws InterruptedException
+	 */
 	private void useResource() throws RemoteException, InterruptedException {
 		// do something with a hypothetic resource...
 		System.out.println("***I'm working with the resource!***");
@@ -500,11 +487,20 @@ public class Node implements Serializable {
 			random.nextInt();
 	}
 
+	/**
+	 * Method called by the coordinator in order to free the resource
+	 * @throws RemoteException
+	 * @throws InterruptedException
+	 */
 	private void freeResource() throws RemoteException, InterruptedException {
 		resourceAvailable = true;
 		inCriticalSection = null;
 	}
 
+	/**
+	 * This node's id
+	 * @return id
+	 */
 	public int getId() {
 		return this.id;
 	}

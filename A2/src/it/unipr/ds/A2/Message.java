@@ -3,7 +3,9 @@ package it.unipr.ds.A2;
 import java.io.Serializable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-
+/**
+ * Class that implements a generic message exchanged by nodes
+ */
 public class Message implements Serializable {
 	private static final long serialVersionUID = 1L;
 

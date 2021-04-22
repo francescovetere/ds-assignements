@@ -4,7 +4,7 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
 /**
- * APIs for mutual exclusion with centralized algorithm
+ * APIs for mutual exclusion with centralized algorithm (implementation)
  */
 public class MutualExclusionImpl extends UnicastRemoteObject implements MutualExclusion {
 	private static final long serialVersionUID = 1L;

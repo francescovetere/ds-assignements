@@ -4,7 +4,7 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
 /**
- * APIs for election with Bully algorithm
+ * APIs for election with Bully algorithm (implementation)
  */
 public class ElectionImpl extends UnicastRemoteObject implements Election {
 	private static final long serialVersionUID = 1L;
