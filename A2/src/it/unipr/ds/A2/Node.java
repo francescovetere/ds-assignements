@@ -16,11 +16,12 @@ public class Node implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	/**
-	 * IDLE: waits for coordination msg CANDIDATE: wants to become coordinator, so
-	 * send an election msg to higher nodes COORDINATOR: send coordination msg to
-	 * all other nodes, and manages the resource from now on REQUESTER: asks the
-	 * coordinator to access the resource WAITER: waits for the coordinator to grant
-	 * the access to the resource DEAD: flips a coin until it becomes running again
+	 * IDLE: waits for coordination msg 
+	 * CANDIDATE: wants to become coordinator, so send an election msg to higher nodes 
+	 * COORDINATOR: send coordination msg to all other nodes, and manages the resource from now on 
+	 * REQUESTER: asks the coordinator to access the resource
+	 * WAITER: waits for the coordinator to grant the access to the resource
+	 * DEAD: flips a coin until it becomes running again
 	 */
 	public enum State {
 		IDLE, CANDIDATE, COORDINATOR, REQUESTER, WAITER, DEAD;
@@ -184,8 +185,6 @@ public class Node implements Serializable {
 
 				this.state = State.CANDIDATE;
 
-				//TODO: If I restart and I set myself CANDIDATE, I have to send an Election msg,
-				// but I never do it
 				sendElection();
 			}
 		}
@@ -404,9 +403,9 @@ public class Node implements Serializable {
 			}
 			break;
 
-		// If we receive an election request, we answer ok to the sender
-		// and we candidate ourselves to become the new coordinator
 		case ELECTION:
+			// If we receive an election request, we answer ok to the sender
+			// and we candidate ourselves to become the new coordinator
 			System.out.println("Received an election message from " + msg.getRemoteNode().getId());
 
 			this.attempts = 0;
@@ -448,7 +447,6 @@ public class Node implements Serializable {
 			// Else, if the OK message was sent by a lower node, I ignore it
 			break;
 
-		// If arrives a request message
 		case REQUEST:
 			System.out.println("Received a request message from " + msg.getRemoteNode().getId());
 
@@ -514,12 +512,13 @@ public class Node implements Serializable {
 	private void sendElection() throws RemoteException, NotBoundException {
 		List<Election> candidates = getAllCandidates(this.id);
 
-		for(Election e : candidates) {
+		for (Election e : candidates) {
 			e.electionMsg(this.election);
 			System.out.println("Election message sent to " + e.getNode().getId() + "\n");
 		}
 
 	}
+
 	/**
 	 * This node's id
 	 * @return id
