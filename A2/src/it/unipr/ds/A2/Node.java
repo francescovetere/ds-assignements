@@ -57,9 +57,9 @@ public class Node implements Serializable {
 	private int TIMEOUT_WHILE = 3000;
 
 	// Probability of dying
-	private static final double H = 0.001;
+	private static final double H = 0.01;
 	// Probability of resuscitate
-	private static final double K = 0.005;
+	private static final double K = 0.05;
 
 	// Useful counter that manages timeouts
 	private int attempts = 0;
@@ -183,6 +183,10 @@ public class Node implements Serializable {
 				this.clearState();
 
 				this.state = State.CANDIDATE;
+
+				//TODO: If I restart and I set myself CANDIDATE, I have to send an Election msg,
+				// but I never do it
+				sendElection();
 			}
 		}
 	}
@@ -200,9 +204,11 @@ public class Node implements Serializable {
 
 				System.out.println("***I recognized that coordinator is dead, so I start an election***");
 
-				for (Election e : getAllCandidates(this.id)) {
-					e.electionMsg(this.election);
-				}
+				// for (Election e : getAllCandidates(this.id)) {
+				// 	e.electionMsg(this.election);
+				// }
+
+				sendElection();
 			}
 		}
 
@@ -295,9 +301,10 @@ public class Node implements Serializable {
 
 				this.state = State.CANDIDATE;
 
-				for (Election e : getAllCandidates(this.id)) {
-					e.electionMsg(this.election);
-				}
+				// for (Election e : getAllCandidates(this.id)) {
+				// 	e.electionMsg(this.election);
+				// }
+				sendElection();
 			}
 		}
 
@@ -414,6 +421,8 @@ public class Node implements Serializable {
 				this.state = State.CANDIDATE;
 
 				msg.getRemoteNode().election.okMsg(this.election);
+
+				sendElection();
 			}
 
 			// Else, if the election request was sent by a higher node, I ignore it and I
@@ -497,6 +506,20 @@ public class Node implements Serializable {
 		inCriticalSection = null;
 	}
 
+	/**
+	 * Method used to send and Election message to all the possible candidates
+	 * @throws NotBoundException
+	 * @throws RemoteException
+	 */
+	private void sendElection() throws RemoteException, NotBoundException {
+		List<Election> candidates = getAllCandidates(this.id);
+
+		for(Election e : candidates) {
+			e.electionMsg(this.election);
+			System.out.println("Election message sent to " + e.getNode().getId() + "\n");
+		}
+
+	}
 	/**
 	 * This node's id
 	 * @return id
