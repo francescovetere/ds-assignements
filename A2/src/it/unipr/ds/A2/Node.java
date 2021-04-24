@@ -58,9 +58,9 @@ public class Node implements Serializable {
 	private int TIMEOUT_WHILE = 3000;
 
 	// Probability of dying
-	private static final double H = 0.01;
+	private static final double H = 0.001;
 	// Probability of resuscitate
-	private static final double K = 0.05;
+	private static final double K = 0.005;
 
 	// Useful counter that manages timeouts
 	private int attempts = 0;
@@ -300,9 +300,6 @@ public class Node implements Serializable {
 
 				this.state = State.CANDIDATE;
 
-				// for (Election e : getAllCandidates(this.id)) {
-				// 	e.electionMsg(this.election);
-				// }
 				sendElection();
 			}
 		}
@@ -413,7 +410,7 @@ public class Node implements Serializable {
 			// If I received an election request from a lower node, I answer OK to it and I
 			// set myself to candidate
 			if (msg.getRemoteNode().getId() < this.id) {
-				clearState();
+				this.waitingNodes.clear();
 
 				System.out.println("Answering ok to " + msg.getRemoteNode().getId());
 
