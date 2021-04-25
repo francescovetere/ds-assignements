@@ -1,4 +1,4 @@
-Per eseguire un test su N nodi, è sufficiente lanciare N comandi di questa forma:
+Per eseguire un test su N nodi è necessario lanciare N comandi di questa forma:
 
 $ java -classpath bin it.unipr.ds.A2.Node <NODE_ID> <NODE_TYPE>
 
@@ -9,12 +9,15 @@ Dove:
 			"i" per un nodo intermedio (intermediate)
 			"l" per il nodo finale (last)
 
-Esempio di esecuzione di 3 nodi:
+Esempio di esecuzione di 4 nodi:
 $ java -classpath bin it.unipr.ds.A2.Node 0 f
 $ java -classpath bin it.unipr.ds.A2.Node 1 i
-$ java -classpath bin it.unipr.ds.A2.Node 2 l
+$ java -classpath bin it.unipr.ds.A2.Node 2 i
+$ java -classpath bin it.unipr.ds.A2.Node 3 l
 
-In ambiente Linux, è inoltre disponibile lo script run.sh, utilizzabile nel seguente modo:
+Da Eclipse ovviamente basterà importare l'intero progetto ed eseguire N volte il codice contenuto nella classe Node, passando ogni volta i 2 parametri in modo opportuno.
+
+In ambiente Linux è inoltre disponibile lo script run.sh, utilizzabile nel seguente modo:
 
 $ ./run.sh <N_NODES>
 
