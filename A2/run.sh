@@ -9,12 +9,12 @@ fi
 
 N_NODES=$1
 
-# Each node has a ID number which start from 0 and goes up incrementally
+# Each node has an ID number which start from 0 and goes up incrementally
 ID=0;
 TYPE="";
 
 
-# Start Communication Nodes
+# Start N_NODES nodes
 for (( i=0; i<$N_NODES; i++ ))
 do
     if (( $i == 0 )) 

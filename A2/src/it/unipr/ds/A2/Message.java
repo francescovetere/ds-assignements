@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 /**
- * Class that implements a generic message exchanged by nodes
+ * Class that implements a generic message exchanged by the nodes in the system
  */
 public class Message implements Serializable {
 	private static final long serialVersionUID = 1L;

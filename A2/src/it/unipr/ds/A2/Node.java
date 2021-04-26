@@ -16,12 +16,11 @@ public class Node implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	/**
-	 * IDLE: waits for coordination msg 
-	 * CANDIDATE: wants to become coordinator, so send an election msg to higher nodes 
-	 * COORDINATOR: send coordination msg to all other nodes, and manages the resource from now on 
-	 * REQUESTER: asks the coordinator to access the resource
-	 * WAITER: waits for the coordinator to grant the access to the resource
-	 * DEAD: flips a coin until it becomes running again
+	 * IDLE: waits for coordination msg CANDIDATE: wants to become coordinator, so
+	 * send an election msg to higher nodes COORDINATOR: sends coordination msg to
+	 * all other nodes, and manages the resource from now on REQUESTER: asks the
+	 * coordinator to access the resource WAITER: waits for the coordinator to grant
+	 * the access to the resource DEAD: flips a coin until it becomes running again
 	 */
 	public enum State {
 		IDLE, CANDIDATE, COORDINATOR, REQUESTER, WAITER, DEAD;
@@ -34,7 +33,8 @@ public class Node implements Serializable {
 	public BlockingQueue<Message> msgQueue;
 
 	// The queue of nodes waiting to access the resource
-	// obviously, this queue has only meaning if this node is the current coordinator
+	// obviously, this queue has only meaning if this node is the current
+	// coordinator
 	public BlockingQueue<MutualExclusion> waitingNodes;
 
 	// The state in which this current node is
@@ -113,7 +113,8 @@ public class Node implements Serializable {
 			this.registry = LocateRegistry.getRegistry();
 			this.state = State.CANDIDATE;
 
-			// Trick for avoiding the first election and directly set this node as coordinator
+			// Trick for avoiding the first election and directly set this node as
+			// coordinator
 			this.attempts = CANDIDATEATTEMPTS;
 		}
 
@@ -203,10 +204,6 @@ public class Node implements Serializable {
 
 				System.out.println("***I recognized that coordinator is dead, so I start an election***");
 
-				// for (Election e : getAllCandidates(this.id)) {
-				// 	e.electionMsg(this.election);
-				// }
-
 				sendElection();
 			}
 		}
@@ -263,7 +260,8 @@ public class Node implements Serializable {
 			checkMessage(msg);
 		}
 
-		// If there is at least one Node waiting for the resource, and the resource's available, 
+		// If there is at least one Node waiting for the resource, and the resource's
+		// available,
 		// grant access and set 'resourceAvailable' to false
 		if (resourceAvailable && (waitingNodes.size() > 0)) {
 			MutualExclusion nextRequester = waitingNodes.take();
@@ -335,10 +333,12 @@ public class Node implements Serializable {
 	}
 
 	/**
-	 * Method that retrieves all the possibly candidates nodes
+	 * Method that retrieves all the possible candidates nodes, except for the
+	 * current one
 	 * 
 	 * @param id The id of the current node that requests the list of candidates
-	 * @return The list of all nodes, except the one that invoked the method
+	 * @return The list of all possible candidates nodes, except the one that
+	 *         invoked the method
 	 * @throws RemoteException
 	 * @throws NotBoundException
 	 */
@@ -479,7 +479,8 @@ public class Node implements Serializable {
 	}
 
 	/**
-	 * Method runned by the current node in the critical section
+	 * Method called by the current node in the critical section
+	 * 
 	 * @throws RemoteException
 	 * @throws InterruptedException
 	 */
@@ -493,6 +494,7 @@ public class Node implements Serializable {
 
 	/**
 	 * Method called by the coordinator in order to free the resource
+	 * 
 	 * @throws RemoteException
 	 * @throws InterruptedException
 	 */
@@ -503,6 +505,7 @@ public class Node implements Serializable {
 
 	/**
 	 * Method used to send and Election message to all the possible candidates
+	 * 
 	 * @throws NotBoundException
 	 * @throws RemoteException
 	 */
@@ -517,8 +520,9 @@ public class Node implements Serializable {
 	}
 
 	/**
-	 * This node's id
-	 * @return id
+	 * Getter for node's id
+	 * 
+	 * @return This node id
 	 */
 	public int getId() {
 		return this.id;
@@ -526,7 +530,13 @@ public class Node implements Serializable {
 
 	public static void main(String[] args) throws RemoteException, NotBoundException, InterruptedException {
 		if (args.length != 2) {
-			System.out.println("Usage: java Node <NODE_ID> <NODE_TYPE>");
+			System.out.print(
+					"Usage: java Node <NODE_ID> <NODE_TYPE>\n\n" + "where:\n\n"
+					+ "<NODE_ID>: a positive integer representing this Node's ID (to be assigned incrementally)\n"
+					+ "<NODE_TYPE>: a character representing this Node's role:\n"
+					+ "\t\"f\" for the first node\n"
+					+ "\t\"i\" for an intermediate node\n"
+					+ "\t\"l\" for the last node");
 			System.exit(1);
 		}
 
