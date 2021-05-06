@@ -1,59 +1,62 @@
 package it.unipr.ds.A3;
 
+import java.util.Arrays;
+
 import javax.jms.JMSException;
 import javax.jms.Message;
-import javax.jms.Queue;
-import javax.jms.QueueReceiver;
-import javax.jms.QueueSession;
+import javax.jms.ObjectMessage;
 import javax.jms.Session;
-import javax.jms.TextMessage;
+import javax.jms.Topic;
+import javax.jms.TopicSession;
+import javax.jms.TopicSubscriber;
 
 import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
-import org.apache.activemq.broker.BrokerFactory;
-import org.apache.activemq.broker.BrokerService;
 
 /**
- *
- * Class providing an implementation of a receiver.
- *
+ * Class that implements a coordinator.
  **/
-
 public class Coordinator {
 	private static final String BROKER_URL = "tcp://localhost:61616";
-	private static final String BROKER_PROPS = "persistent=false&useJmx=false";
-	private static final String QUEUE_NAME = "queue";
+	private static final String TOPIC_NAME = "topic";
+	private final int id;
 
-	/**
-	 * Receives a sequence of messages.
-	 *
-	 **/
-	public void receive() {
+	public Coordinator(int id) {
+		this.id = id;
+	}
+
+	public void start() {
+		System.out.println("Coordinator " + this.id + " running");
+
 		ActiveMQConnection connection = null;
+
 		try {
-			BrokerService broker = BrokerFactory.createBroker("broker:(" + BROKER_URL + ")?" + BROKER_PROPS);
-
-			broker.start();
-
 			ActiveMQConnectionFactory cf = new ActiveMQConnectionFactory(Coordinator.BROKER_URL);
 
 			connection = (ActiveMQConnection) cf.createConnection();
 
+			// We want to receive an ObjectMessage, so we explicitly declare that we trust our package
+			connection.setTrustedPackages(Arrays.asList("it.unipr.ds.A3"));
+
 			connection.start();
 
-			QueueSession session = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
+			// Coordinators subscribe to Client's request, and then handle them (vote the request or not)
+			TopicSession session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
 
-			Queue queue = session.createQueue(Coordinator.QUEUE_NAME);
+			Topic topic = session.createTopic(TOPIC_NAME);
 
-			QueueReceiver receiver = session.createReceiver(queue);
+			TopicSubscriber subscriber = session.createSubscriber(topic);
 
 			while (true) {
-				Message message = receiver.receive();
+				Message msg = subscriber.receive();
+				
+				if (msg instanceof ObjectMessage) {
+					ObjectMessage objMsg = (ObjectMessage) msg;
+					Request req = (Request) objMsg.getObject();
 
-				if (message instanceof TextMessage) {
-					System.out.println("Message: " + ((TextMessage) message).getText());
-				} else {
-					break;
+					System.out.println("Received " + req.getType() + " request from client " + req.getSenderID());
+
+					// Now, we decide whether to vote the request or not
 				}
 			}
 		} catch (Exception e) {
@@ -69,15 +72,13 @@ public class Coordinator {
 		}
 	}
 
-	/**
-	 * Starts the coordinator.
-	 *
-	 * @param args
-	 *
-	 *             It does not need arguments.
-	 *
-	 **/
 	public static void main(final String[] args) {
-		new Coordinator().receive();
+		if (args.length != 1) {
+			System.out.print("Usage: java Coordinator <COORDINATOR_ID>");
+			System.exit(1);
+		}
+
+		int id = Integer.parseInt(args[0]);
+		new Coordinator(id).start();
 	}
 }
