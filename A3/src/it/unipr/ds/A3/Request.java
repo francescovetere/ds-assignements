@@ -2,6 +2,8 @@ package it.unipr.ds.A3;
 
 import java.io.Serializable;
 
+import javax.jms.Queue;
+
 /**
  * Class that defines a generic request made by a client
  */
@@ -14,10 +16,12 @@ public class Request implements Serializable {
 
 	private int senderID;
 	private Type type;
+	private Queue queue;
 
-	public Request(int senderID, Type type) {
+	public Request(int senderID, Type type, Queue queue) {
 		this.senderID = senderID;
 		this.type = type;
+		this.queue = queue;
 	}
 
 	public int getSenderID() {
@@ -26,5 +30,9 @@ public class Request implements Serializable {
 
 	public Type getType() {
 		return this.type;
+	}
+
+	public Queue getQueue() {
+		return this.queue;
 	}
 }
