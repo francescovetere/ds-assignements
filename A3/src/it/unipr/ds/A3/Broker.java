@@ -1,6 +1,10 @@
 package it.unipr.ds.A3;
 
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Properties;
 import java.util.Scanner;
+
 import org.apache.activemq.broker.BrokerFactory;
 import org.apache.activemq.broker.BrokerService;
 
@@ -38,6 +42,31 @@ public class Broker {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	/**
+	* Method that reads and parses a .properties file, containing the address and
+	* the port of the master node
+	* 
+	* @param filename String that identifies the properties file
+	* @param property String that identifies the property to be read
+	* @return property value
+	* @throws IOException
+	*/
+	public static String readConfig(final String filename, final String property) throws IOException {
+		// Create a reader object on the properties file
+		FileReader reader = new FileReader(filename);
+
+		// Create properties object
+		Properties p = new Properties();
+
+		// Add a wrapper around reader object
+		p.load(reader);
+
+		// Access properties data
+		String serversProperty = p.getProperty(property);
+
+		return serversProperty;
 	}
 
 	public static void main(final String[] args) {

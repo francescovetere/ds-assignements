@@ -1,11 +1,10 @@
 package it.unipr.ds.A3;
 
-import java.util.Arrays;
-
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageProducer;
 import javax.jms.ObjectMessage;
+import javax.jms.Queue;
 import javax.jms.QueueReceiver;
 import javax.jms.QueueSession;
 import javax.jms.Session;
@@ -28,7 +27,7 @@ public class Coordinator {
 	private ActiveMQConnection connection = null;
 
 	private final int id;
-	private boolean imAvailable = true; 
+	private boolean imAvailable = true;
 
 	public Coordinator(int id) {
 		this.id = id;
@@ -36,7 +35,6 @@ public class Coordinator {
 
 	public void start() {
 		System.out.println("Coordinator " + this.id + " running");
-
 
 		try {
 			ActiveMQConnectionFactory cf = new ActiveMQConnectionFactory(Coordinator.BROKER_URL);
@@ -61,10 +59,12 @@ public class Coordinator {
 			// Session.AUTO_ACKNOWLEDGE);
 
 			QueueSession qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
+			Queue queue = qsession.createQueue("queue" + this.id);
+			QueueReceiver queueReceiver = qsession.createReceiver(queue);
 
 			while (true) {
 				Message msg = subscriber.receive();
-				
+
 				if (msg instanceof ObjectMessage) {
 					ObjectMessage objMsg = (ObjectMessage) msg;
 					Request req = (Request) objMsg.getObject();
@@ -72,20 +72,23 @@ public class Coordinator {
 					System.out.println("Received " + req.getType() + " request from client " + req.getSenderID());
 
 					// If I receive a READ or WRITE request and I can handle it, I reply with a vote
-					if((req.getType() == Type.READ || req.getType() == Type.WRITE) && imAvailable) {
+					if ((req.getType() == Type.READ || req.getType() == Type.WRITE) && imAvailable) {
 						System.out.println("I reply to " + req.getSenderID() + " with a Vote!");
 
-						MessageProducer producer = qsession.createProducer(req.getQueue());
+						Queue senderQueue = req.getQueue();
+
+						MessageProducer producer = qsession.createProducer(senderQueue);
 
 						TextMessage vote = qsession.createTextMessage();
 
-						vote.setJMSReplyTo(req.getQueue());
+						vote.setJMSReplyTo(queue);
 						vote.setJMSCorrelationID(this.toString());
 						vote.setText("I vote for you!");
 
-						producer.send(req.getQueue(), vote);
+						producer.send(senderQueue, vote);
 						imAvailable = false;
 					}
+
 					else if (req.getType() == Type.RELEASE) {
 						imAvailable = true;
 					}
@@ -97,6 +100,17 @@ public class Coordinator {
 					// System.out.println("Received " + receiveMessage);
 
 				}
+
+				/*
+				Message pointToPoint = queueReceiver.receive(1000);
+				if (pointToPoint instanceof ObjectMessage) {
+					ObjectMessage objMsg = (ObjectMessage) msg;
+					Request req = (Request) objMsg.getObject();
+					if (req.getType() == Type.RELEASE) {
+						imAvailable = true;
+					}
+				}
+				*/
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
