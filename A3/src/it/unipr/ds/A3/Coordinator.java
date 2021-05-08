@@ -1,12 +1,10 @@
 package it.unipr.ds.A3;
 
-import java.util.Arrays;
-
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageProducer;
 import javax.jms.ObjectMessage;
-import javax.jms.QueueReceiver;
+import javax.jms.Queue;
 import javax.jms.QueueSession;
 import javax.jms.Session;
 import javax.jms.TextMessage;
@@ -75,17 +73,20 @@ public class Coordinator {
 					if((req.getType() == Type.READ || req.getType() == Type.WRITE) && imAvailable) {
 						System.out.println("I reply to " + req.getSenderID() + " with a Vote!");
 
-						MessageProducer producer = qsession.createProducer(req.getQueue());
+						Queue senderQueue = req.getQueue();
+						
+						MessageProducer producer = qsession.createProducer(senderQueue);
 
 						TextMessage vote = qsession.createTextMessage();
 
-						vote.setJMSReplyTo(req.getQueue());
+						vote.setJMSReplyTo(senderQueue);
 						vote.setJMSCorrelationID(this.toString());
 						vote.setText("I vote for you!");
 
-						producer.send(req.getQueue(), vote);
+						producer.send(senderQueue, vote);
 						imAvailable = false;
 					}
+
 					else if (req.getType() == Type.RELEASE) {
 						imAvailable = true;
 					}
