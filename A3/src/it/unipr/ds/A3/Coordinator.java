@@ -1,5 +1,6 @@
 package it.unipr.ds.A3;
 
+import javax.jms.Destination;
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageProducer;
@@ -12,6 +13,7 @@ import javax.jms.TextMessage;
 import javax.jms.Topic;
 import javax.jms.TopicSession;
 import javax.jms.TopicSubscriber;
+import javax.jms.MessageConsumer;
 
 import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
@@ -27,7 +29,6 @@ public class Coordinator {
 	private ActiveMQConnection connection = null;
 
 	private final int id;
-	private boolean imAvailable = true;
 
 	public Coordinator(int id) {
 		this.id = id;
@@ -43,24 +44,21 @@ public class Coordinator {
 
 			this.connection = (ActiveMQConnection) cf.createConnection();
 
-			// We want to receive an ObjectMessage, so we explicitly declare that we trust our package
+			// We want to receive an ObjectMessage, so we explicitly declare that we trust
+			// our package
 			// this.connection.setTrustedPackages(Arrays.asList("it.unipr.ds.A3"));
 
 			connection.start();
 
-			// Coordinators subscribe to Client's request, and then handle them (vote the request or not)
+			// Coordinators subscribe to Client's request, and then handle them (vote the
+			// request or not)
 			TopicSession session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
 
 			Topic topic = session.createTopic(TOPIC_NAME);
 
 			TopicSubscriber subscriber = session.createSubscriber(topic);
 
-			// TopicSession qsession = this.connection.createTopicSession(false,
-			// Session.AUTO_ACKNOWLEDGE);
-
 			QueueSession qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
-			Queue queue = qsession.createQueue("queue" + this.id);
-			QueueReceiver queueReceiver = qsession.createReceiver(queue);
 
 			while (true) {
 				Message msg = subscriber.receive();
@@ -72,45 +70,34 @@ public class Coordinator {
 					System.out.println("Received " + req.getType() + " request from client " + req.getSenderID());
 
 					// If I receive a READ or WRITE request and I can handle it, I reply with a vote
-					if ((req.getType() == Type.READ || req.getType() == Type.WRITE) && imAvailable) {
+					if (req.getType() == Type.READ || req.getType() == Type.WRITE) {
 						System.out.println("I reply to " + req.getSenderID() + " with a Vote!");
 
 						Queue senderQueue = req.getQueue();
 
 						MessageProducer producer = qsession.createProducer(senderQueue);
 
+						Destination tempDest = session.createTemporaryQueue();
+
+						MessageConsumer consumer = qsession.createConsumer(tempDest);
+
 						TextMessage vote = qsession.createTextMessage();
 
-						vote.setJMSReplyTo(queue);
-						vote.setJMSCorrelationID(this.toString());
+						vote.setJMSReplyTo(tempDest);
+						// vote.setJMSCorrelationID(Integer.toString(this.id));
 						vote.setText("I vote for you!");
 
-						producer.send(senderQueue, vote);
-						imAvailable = false;
+						producer.send(vote);
+
+						Message release = consumer.receive();
+
+						ObjectMessage releaseObjMsg = (ObjectMessage) release;
+						Request releaseReq = (Request) releaseObjMsg.getObject();
+
+						System.out.println("Received " + releaseReq.getType() + " from client " + releaseReq.getSenderID());
 					}
-
-					else if (req.getType() == Type.RELEASE) {
-						imAvailable = true;
-					}
-
-					// QueueReceiver receiver = qsession.createReceiver(req.getQueue());
-
-					// Message receiveMessage = receiver.receive(1000);
-
-					// System.out.println("Received " + receiveMessage);
 
 				}
-
-				/*
-				Message pointToPoint = queueReceiver.receive(1000);
-				if (pointToPoint instanceof ObjectMessage) {
-					ObjectMessage objMsg = (ObjectMessage) msg;
-					Request req = (Request) objMsg.getObject();
-					if (req.getType() == Type.RELEASE) {
-						imAvailable = true;
-					}
-				}
-				*/
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

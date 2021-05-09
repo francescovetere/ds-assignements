@@ -8,11 +8,13 @@ import java.util.Random;
 import javax.jms.Destination;
 import javax.jms.JMSException;
 import javax.jms.Message;
+import javax.jms.MessageProducer;
 import javax.jms.ObjectMessage;
 import javax.jms.Queue;
 import javax.jms.QueueReceiver;
 import javax.jms.QueueSession;
 import javax.jms.Session;
+import javax.jms.TextMessage;
 import javax.jms.Topic;
 import javax.jms.TopicPublisher;
 import javax.jms.TopicSession;
@@ -43,13 +45,11 @@ public class Client {
 	// Time for simulating a write operation
 	private static final int WRITE_TIME = 5000;
 
-	// List of voters (Coordinators which I've to send a RELEASE when I'm done)
-	private List<Destination> voters = new ArrayList<>();
+	// List of votes (Coordinators which I've to send a RELEASE when I'm done)
+	private List<TextMessage> votes = new ArrayList<>();
 
-	// Counter for the received votes
-	private int votes = 0;
-
-	// Boolean that tells if the previous client's request was successfully handled (he received enough votes) 
+	// Boolean that tells if the previous client's request was successfully handled
+	// (he received enough votes)
 	// If it is true, we can submit a new (randomic) type of request
 	// Otherwise, we must continue submitting the same type of request
 	private boolean previousRequestHandled = true;
@@ -75,7 +75,8 @@ public class Client {
 	}
 
 	public void start() throws InterruptedException {
-		// Random number, useful for decide when to submit a request, and of which type the request will be
+		// Random number, useful for decide when to submit a request, and of which type
+		// the request will be
 		Random random = new Random();
 
 		// The type of the request
@@ -86,29 +87,28 @@ public class Client {
 			this.connection = (ActiveMQConnection) cf.createConnection();
 			connection.start();
 
-			// Client publish its request, waiting for subscribers (Coordinators) to handle this request
+			// Client publish its request, waiting for subscribers (Coordinators) to handle
+			// this request
 			TopicSession session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
 
 			Topic topic = session.createTopic(TOPIC_NAME);
 
 			TopicPublisher publisher = session.createPublisher(topic);
 
-			//This session is used for point-to-point communication
-			QueueSession qsession = this.connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
+			QueueSession qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
 
-			Queue queue = qsession.createQueue("queue" + this.id);
+			Queue queue = qsession.createQueue("queue " + this.id);
 
 			QueueReceiver receiver = qsession.createReceiver(queue);
 
-			// MessageProducer producer = qsession.createProducer(null);
-
 			while (true) {
-				votes = 0;
+				votes.clear();
 
 				// We sleep for a random time before submitting a new request
 				Thread.sleep(random.nextInt(MAX_SLEEP));
 
-				// If the previous request received enough votes, we send either a read or a write request, randomly
+				// If the previous request received enough votes, we send either a read or a
+				// write request, randomly
 				// Otherwise, we continue submitting the same type of request as before
 				if (previousRequestHandled)
 					requestType = (random.nextDouble() < 0.5) ? Type.READ : Type.WRITE;
@@ -121,54 +121,50 @@ public class Client {
 				publisher.publish(msg);
 
 				// Now, we wait for the votes
-				// If the request was a read and we reached the read quorum, we sleep for READ_TIME ms
-				// If the request was a write and we reached the write quorum, we sleep for WRITE_TIME ms
+				// If the request was a read and we reached the read quorum, we sleep for
+				// READ_TIME ms
+				// If the request was a write and we reached the write quorum, we sleep for
+				// WRITE_TIME ms
 
 				Message receivedMessage = null;
 				while (true) {
 					receivedMessage = receiver.receive(MAX_RECEIVE);
 					if (receivedMessage == null)
 						break;
-					++votes; // I received a vote, so I increment the vote's counter
-					voters.add(receivedMessage.getJMSReplyTo());
+						
+					if(receivedMessage instanceof TextMessage)
+						votes.add((TextMessage) receivedMessage); // get the temporary queue created by coordinator
 				}
+
+				System.out.println("\t" + votes.size() + " coordinators voted for me");
 
 				// If we reach the quorum for the corresponding request made,
 				// we simulate the action with a sleep
-				if (requestType == Type.READ && votes >= readQuorum) {
+				if (requestType == Type.READ && votes.size() >= readQuorum) {
 					read();
 
 					// When I've finished, I send a RELEASE message to all my voters
+					for (TextMessage vote : votes) {
+						MessageProducer producer = qsession.createProducer(null);
+						ObjectMessage releaseMsg = qsession
+								.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
 
-					// for (Destination destination : voters) {
-					// 	producer.send(destination, qsession.createTextMessage("RELEASE!"));
-					// }
-
-					// With this solution I release everybody, which is not correct
-					// TODO: Implement the RELEASE phase
-					msg = session.createObjectMessage();
-
-					msg.setObject(new Request(this.id, Request.Type.RELEASE, queue));
-
-					publisher.publish(msg);
+						producer.send(vote.getJMSReplyTo(), releaseMsg);
+					}
 
 					previousRequestHandled = true;
 
-				} else if (requestType == Type.WRITE && votes >= writeQuorum) {
+				} else if (requestType == Type.WRITE && votes.size() >= writeQuorum) {
 					write();
 
 					// When I've finished, I send a RELEASE message to all my voters
-					// for (Destination destination : voters) {
-					// 	producer.send(destination, qsession.createTextMessage("RELEASE!"));
-					// }
+					for (TextMessage vote : votes) {
+						MessageProducer producer = qsession.createProducer(null);
+						ObjectMessage releaseMsg = qsession
+								.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
 
-					// With this solution I release everybody, which is not correct
-					// TODO: Implement the RELEASE phase 
-					msg = session.createObjectMessage();
-
-					msg.setObject(new Request(this.id, Request.Type.RELEASE, queue));
-
-					publisher.publish(msg);
+						producer.send(vote.getJMSReplyTo(), releaseMsg);
+					}
 
 					previousRequestHandled = true;
 				}
