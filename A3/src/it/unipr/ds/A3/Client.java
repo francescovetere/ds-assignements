@@ -154,6 +154,8 @@ public class Client {
 
 					previousRequestHandled = true;
 
+					System.out.println("Release sent to voters");
+
 				} else if (requestType == Type.WRITE && votes.size() >= writeQuorum) {
 					write();
 
@@ -167,10 +169,14 @@ public class Client {
 					}
 
 					previousRequestHandled = true;
+
+					System.out.println("Release sent to voters");
 				}
 
 				else {
 					previousRequestHandled = false;
+
+					System.out.println("Quorum not satisfied");
 				}
 			}
 

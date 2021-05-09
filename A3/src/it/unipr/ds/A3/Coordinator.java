@@ -77,7 +77,7 @@ public class Coordinator {
 
 						MessageProducer producer = qsession.createProducer(senderQueue);
 
-						Destination tempDest = session.createTemporaryQueue();
+						Destination tempDest = qsession.createTemporaryQueue();
 
 						MessageConsumer consumer = qsession.createConsumer(tempDest);
 
