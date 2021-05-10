@@ -58,6 +58,14 @@ public class Client {
 	private int readQuorum;
 	private int writeQuorum;
 
+	TopicSession session;
+	Topic topic;
+	TopicPublisher publisher;
+
+	QueueSession qsession;
+	Queue queue;
+	QueueReceiver receiver;
+
 	public Client(int id) {
 		this.id = id;
 
@@ -75,7 +83,7 @@ public class Client {
 	}
 
 	public void start() throws InterruptedException {
-		// Random number, useful for decide when to submit a request, and of which type
+		// Random number, useful to decide when to submit a request, and of which type
 		// the request will be
 		Random random = new Random();
 
@@ -89,17 +97,13 @@ public class Client {
 
 			// Client publish its request, waiting for subscribers (Coordinators) to handle
 			// this request
-			TopicSession session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+			session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+			topic = session.createTopic(TOPIC_NAME);
+			publisher = session.createPublisher(topic);
 
-			Topic topic = session.createTopic(TOPIC_NAME);
-
-			TopicPublisher publisher = session.createPublisher(topic);
-
-			QueueSession qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
-
-			Queue queue = qsession.createQueue("queue " + this.id);
-
-			QueueReceiver receiver = qsession.createReceiver(queue);
+			qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
+			queue = qsession.createQueue("queue " + this.id);
+			receiver = qsession.createReceiver(queue);
 
 			while (true) {
 				votes.clear();
@@ -113,27 +117,30 @@ public class Client {
 				if (previousRequestHandled)
 					requestType = (random.nextDouble() < 0.5) ? Type.READ : Type.WRITE;
 
-				System.out.println("Sending " + requestType + " request to coordinators");
+				String correlationID = Integer.toString(this.id);
+				System.out.println("Sending " + requestType + " request to coordinators (correlation id: " + correlationID + ")");
 
-				ObjectMessage msg = session.createObjectMessage();
-				msg.setObject(new Request(this.id, requestType, queue));
+				ObjectMessage request = session.createObjectMessage();
+				request.setObject(new Request(this.id, requestType, queue));
 
-				publisher.publish(msg);
+				request.setJMSCorrelationID(correlationID);
+				publisher.publish(request);
 
 				// Now, we wait for the votes
 				// If the request was a read and we reached the read quorum, we sleep for
 				// READ_TIME ms
 				// If the request was a write and we reached the write quorum, we sleep for
 				// WRITE_TIME ms
-
 				Message receivedMessage = null;
 				while (true) {
 					receivedMessage = receiver.receive(MAX_RECEIVE);
 					if (receivedMessage == null)
 						break;
-						
-					if(receivedMessage instanceof TextMessage)
+
+					if (receivedMessage instanceof TextMessage) {
+						System.out.println("**Received vote (correlation id: " + receivedMessage.getJMSCorrelationID() + ")");
 						votes.add((TextMessage) receivedMessage); // get the temporary queue created by coordinator
+					}
 				}
 
 				System.out.println("\t" + votes.size() + " coordinators voted for me");
@@ -144,33 +151,13 @@ public class Client {
 					read();
 
 					// When I've finished, I send a RELEASE message to all my voters
-					for (TextMessage vote : votes) {
-						MessageProducer producer = qsession.createProducer(null);
-						ObjectMessage releaseMsg = qsession
-								.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
-
-						producer.send(vote.getJMSReplyTo(), releaseMsg);
-					}
-
-					previousRequestHandled = true;
-
-					System.out.println("Release sent to voters");
+					release();
 
 				} else if (requestType == Type.WRITE && votes.size() >= writeQuorum) {
 					write();
 
 					// When I've finished, I send a RELEASE message to all my voters
-					for (TextMessage vote : votes) {
-						MessageProducer producer = qsession.createProducer(null);
-						ObjectMessage releaseMsg = qsession
-								.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
-
-						producer.send(vote.getJMSReplyTo(), releaseMsg);
-					}
-
-					previousRequestHandled = true;
-
-					System.out.println("Release sent to voters");
+					release();
 				}
 
 				else {
@@ -201,6 +188,24 @@ public class Client {
 	private void write() throws InterruptedException {
 		System.out.println("***Simulating a write***");
 		Thread.sleep(WRITE_TIME);
+	}
+
+	private void release() throws JMSException {
+		for (TextMessage vote : votes) {
+			MessageProducer producer = qsession.createProducer(null);
+			ObjectMessage releaseMsg = qsession.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
+
+			String correlationID = Integer.toString(this.id);
+
+			releaseMsg.setJMSCorrelationID(correlationID);
+
+			System.out.println("*Sending release (correlation id=" + correlationID +")");
+			producer.send(vote.getJMSReplyTo(), releaseMsg);
+		}
+
+		previousRequestHandled = true;
+
+		System.out.println("*Release successfully sent to voters");
 	}
 
 	public static void main(final String[] args) throws InterruptedException {

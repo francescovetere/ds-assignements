@@ -30,6 +30,12 @@ public class Coordinator {
 
 	private final int id;
 
+	TopicSession session;
+	Topic topic;
+	TopicSubscriber subscriber;
+
+	QueueSession qsession;
+
 	public Coordinator(int id) {
 		this.id = id;
 	}
@@ -52,13 +58,11 @@ public class Coordinator {
 
 			// Coordinators subscribe to Client's request, and then handle them (vote the
 			// request or not)
-			TopicSession session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+			session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+			topic = session.createTopic(TOPIC_NAME);
+			subscriber = session.createSubscriber(topic);
 
-			Topic topic = session.createTopic(TOPIC_NAME);
-
-			TopicSubscriber subscriber = session.createSubscriber(topic);
-
-			QueueSession qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
+			qsession = connection.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
 
 			while (true) {
 				Message msg = subscriber.receive();
@@ -67,12 +71,10 @@ public class Coordinator {
 					ObjectMessage objMsg = (ObjectMessage) msg;
 					Request req = (Request) objMsg.getObject();
 
-					System.out.println("Received " + req.getType() + " request from client " + req.getSenderID());
+					System.out.println("\tReceived " + req.getType() + " request from client " + req.getSenderID() + " (correlation id: " + msg.getJMSCorrelationID() + ")");
 
 					// If I receive a READ or WRITE request and I can handle it, I reply with a vote
 					if (req.getType() == Type.READ || req.getType() == Type.WRITE) {
-						System.out.println("I reply to " + req.getSenderID() + " with a Vote!");
-
 						Queue senderQueue = req.getQueue();
 
 						MessageProducer producer = qsession.createProducer(senderQueue);
@@ -82,11 +84,14 @@ public class Coordinator {
 						MessageConsumer consumer = qsession.createConsumer(tempDest);
 
 						TextMessage vote = qsession.createTextMessage();
-
 						vote.setJMSReplyTo(tempDest);
-						// vote.setJMSCorrelationID(Integer.toString(this.id));
+
+						String correlationID = Integer.toString(this.id);
+						
+						vote.setJMSCorrelationID(correlationID);
 						vote.setText("I vote for you!");
 
+						System.out.println("*Sending vote to " + req.getSenderID() + " (correlation id = " + correlationID + ")");
 						producer.send(vote);
 
 						Message release = consumer.receive();
@@ -94,7 +99,8 @@ public class Coordinator {
 						ObjectMessage releaseObjMsg = (ObjectMessage) release;
 						Request releaseReq = (Request) releaseObjMsg.getObject();
 
-						System.out.println("Received " + releaseReq.getType() + " from client " + releaseReq.getSenderID());
+						if (releaseReq.getType() == Type.RELEASE)
+							System.out.println("**Received release (correlation id = " + release.getJMSCorrelationID() + ")");
 					}
 
 				}
