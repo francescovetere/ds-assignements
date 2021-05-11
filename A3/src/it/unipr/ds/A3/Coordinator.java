@@ -36,6 +36,8 @@ public class Coordinator {
 
 	QueueSession qsession;
 
+	int msgID = 0;
+
 	public Coordinator(int id) {
 		this.id = id;
 	}
@@ -86,7 +88,8 @@ public class Coordinator {
 						TextMessage vote = qsession.createTextMessage();
 						vote.setJMSReplyTo(tempDest);
 
-						String correlationID = Integer.toString(this.id);
+						String correlationID = "<" + this.id + ":" + this.msgID + ">";
+						++msgID;
 						
 						vote.setJMSCorrelationID(correlationID);
 						vote.setText("I vote for you!");

@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import javax.jms.Destination;
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageProducer;
@@ -66,6 +65,8 @@ public class Client {
 	Queue queue;
 	QueueReceiver receiver;
 
+	int msgID = 0;
+
 	public Client(int id) {
 		this.id = id;
 
@@ -117,8 +118,11 @@ public class Client {
 				if (previousRequestHandled)
 					requestType = (random.nextDouble() < 0.5) ? Type.READ : Type.WRITE;
 
-				String correlationID = Integer.toString(this.id);
-				System.out.println("Sending " + requestType + " request to coordinators (correlation id: " + correlationID + ")");
+				String correlationID = "<" + this.id + ":" + this.msgID + ">";
+				++msgID;
+
+				System.out
+						.println("Sending " + requestType + " request to coordinators (correlation id: " + correlationID + ")");
 
 				ObjectMessage request = session.createObjectMessage();
 				request.setObject(new Request(this.id, requestType, queue));
@@ -147,20 +151,30 @@ public class Client {
 
 				// If we reach the quorum for the corresponding request made,
 				// we simulate the action with a sleep
-				if (requestType == Type.READ && votes.size() >= readQuorum) {
-					if(votes.size() > readQuorum)
-						releaseUnnecessaryVoters();
+				if (requestType.equals(Type.READ) && votes.size() >= readQuorum) {
+					if (votes.size() > readQuorum) {
+						// We release only the first votes.size() - readQuorum voters
+						System.out.println("\t\t" + (votes.size() - readQuorum) + " exceeding voters");
+						List<TextMessage> toBeReleased = votes.subList(0, votes.size() - readQuorum);
+						release(toBeReleased);
+						for(int i = 0; i < votes.size(); ++i) votes.remove(i);
+					}
 
 					read();
 
 					// When I've finished, I send a RELEASE message to all my voters
-					release();
+					release(votes);
 
-				} else if (requestType == Type.WRITE && votes.size() >= writeQuorum) {
+					previousRequestHandled = true;
+
+				} else if (requestType.equals(Type.WRITE) && votes.size() >= writeQuorum) {
 					write();
 
 					// When I've finished, I send a RELEASE message to all my voters
-					release();
+					release(votes);
+
+					previousRequestHandled = true;
+
 				}
 
 				else {
@@ -183,48 +197,59 @@ public class Client {
 		}
 	}
 
+	/**
+	 * Simulates a read operation
+	 * @throws InterruptedException
+	 */
 	private void read() throws InterruptedException {
 		System.out.println("***Simulating a read***");
 		Thread.sleep(READ_TIME);
 	}
 
+	/**
+	 * Simulates a write operation
+	 * @throws InterruptedException
+	 */
 	private void write() throws InterruptedException {
 		System.out.println("***Simulating a write***");
 		Thread.sleep(WRITE_TIME);
 	}
 
-	private void release() throws JMSException {
-		for (TextMessage vote : votes) {
+	// private void releaseUnnecessaryVoters() throws JMSException {
+	// 	int votersToRelease = votes.size() - readQuorum;
+	// 	for(int i=0; i<votersToRelease; i++){
+	// 		MessageProducer producer = qsession.createProducer(null);
+	// 		ObjectMessage releaseMsg = qsession.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
+
+	// 		String correlationID = Integer.toString(this.id);
+
+	// 		releaseMsg.setJMSCorrelationID(correlationID);
+
+	// 		System.out.println("*Sending release (correlation id=" + correlationID +")");
+	// 		producer.send(votes.get(i).getJMSReplyTo(), releaseMsg);
+
+	// 		votes.remove(i);
+	// 	}
+	// }
+
+	/**
+	 * Release all the voters contained in the list votes
+	 * @param votes The list of votes sent by voters to be released
+	 * @throws JMSException
+	 */
+	private void release(List<TextMessage> votes) throws JMSException {
+		System.out.println("\t\tI release " + votes.size() + " voters");
+		for (int i = 0; i < votes.size(); ++i) {
 			MessageProducer producer = qsession.createProducer(null);
 			ObjectMessage releaseMsg = qsession.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
 
-			String correlationID = Integer.toString(this.id);
+			String correlationID = "<" + this.id + ":" + this.msgID + ">";
+			++msgID;
 
 			releaseMsg.setJMSCorrelationID(correlationID);
 
-			System.out.println("*Sending release (correlation id=" + correlationID +")");
-			producer.send(vote.getJMSReplyTo(), releaseMsg);
-		}
-
-		previousRequestHandled = true;
-
-		System.out.println("*Release successfully sent to voters");
-	}
-
-	private void releaseUnnecessaryVoters() throws JMSException {
-		int votersToRelease = votes.size() - readQuorum;
-		for(int i=0; i<votersToRelease; i++){
-			MessageProducer producer = qsession.createProducer(null);
-			ObjectMessage releaseMsg = qsession.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
-
-			String correlationID = Integer.toString(this.id);
-
-			releaseMsg.setJMSCorrelationID(correlationID);
-
-			System.out.println("*Sending release (correlation id=" + correlationID +")");
-			producer.send(votes.get(i).getJMSReplyTo(), releaseMsg);
-
-			votes.remove(i);
+			System.out.println("*Sending release (correlation id = " + correlationID + ")");
+			producer.send(this.votes.get(i).getJMSReplyTo(), releaseMsg);
 		}
 	}
 
