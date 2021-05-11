@@ -148,6 +148,9 @@ public class Client {
 				// If we reach the quorum for the corresponding request made,
 				// we simulate the action with a sleep
 				if (requestType == Type.READ && votes.size() >= readQuorum) {
+					if(votes.size() > readQuorum)
+						releaseUnnecessaryVoters();
+
 					read();
 
 					// When I've finished, I send a RELEASE message to all my voters
@@ -206,6 +209,23 @@ public class Client {
 		previousRequestHandled = true;
 
 		System.out.println("*Release successfully sent to voters");
+	}
+
+	private void releaseUnnecessaryVoters() throws JMSException {
+		int votersToRelease = votes.size() - readQuorum;
+		for(int i=0; i<votersToRelease; i++){
+			MessageProducer producer = qsession.createProducer(null);
+			ObjectMessage releaseMsg = qsession.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
+
+			String correlationID = Integer.toString(this.id);
+
+			releaseMsg.setJMSCorrelationID(correlationID);
+
+			System.out.println("*Sending release (correlation id=" + correlationID +")");
+			producer.send(votes.get(i).getJMSReplyTo(), releaseMsg);
+
+			votes.remove(i);
+		}
 	}
 
 	public static void main(final String[] args) throws InterruptedException {
