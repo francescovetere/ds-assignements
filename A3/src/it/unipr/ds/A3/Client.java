@@ -36,7 +36,7 @@ public class Client {
 	private static final int MAX_SLEEP = 7000;
 
 	// Max time for receiving a coordinator vote
-	private static final int MAX_RECEIVE = 1000;
+	private static final int MAX_RECEIVE = 5000;
 
 	// Time for simulating a read operation
 	private static final int READ_TIME = 3000;
@@ -157,7 +157,9 @@ public class Client {
 						System.out.println("\t\t" + (votes.size() - readQuorum) + " exceeding voters");
 						List<TextMessage> toBeReleased = votes.subList(0, votes.size() - readQuorum);
 						release(toBeReleased);
-						for(int i = 0; i < votes.size(); ++i) votes.remove(i);
+						votes.subList(0, votes.size() - readQuorum).clear();
+						// System.out.println("Voters I sent release: " + toBeReleased.size());	
+						// for(int i = 0; i < toBeReleased.size(); ++i) votes.remove(i);
 					}
 
 					read();
@@ -250,6 +252,8 @@ public class Client {
 
 			System.out.println("*Sending release (correlation id = " + correlationID + ")");
 			producer.send(this.votes.get(i).getJMSReplyTo(), releaseMsg);
+
+			// votes.remove(i);
 		}
 	}
 
