@@ -158,8 +158,7 @@ public class Client {
 						List<TextMessage> toBeReleased = votes.subList(0, votes.size() - readQuorum);
 						release(toBeReleased);
 						votes.subList(0, votes.size() - readQuorum).clear();
-						// System.out.println("Voters I sent release: " + toBeReleased.size());	
-						// for(int i = 0; i < toBeReleased.size(); ++i) votes.remove(i);
+						// for(int i = 0; i < votes.size(); ++i) votes.remove(i);
 					}
 
 					read();
