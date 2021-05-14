@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# The number of clients and of coordinators we want to create is passed by command line as the first and second arguments
+# The number of clients and of coordinators we want to create is passed by command line as first and second arguments
 if (( $# != 2 ))
 then
     echo "Usage: $0 <N_COORDINATORS> <N_CLIENTS>"

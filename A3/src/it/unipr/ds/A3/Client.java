@@ -24,7 +24,15 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import it.unipr.ds.A3.Request.Type;
 
 /**
- * Class that implements a client.
+ * Class that implements a client
+ * 
+ * A client publishes a read or write request to the topic, waiting for votes
+ * When votes arrives, he evalutes if these votes are enough to reach the quorum:
+ * If it is so, it performs its operation, then sends a release to all its voters
+ *
+ * Then, the client is ready to perform new requests: if the previous request was successfull,
+ * he randomly changes the type of its request
+ * Otherwise, he keeps submitting the same type of request
  **/
 public class Client {
 	private static final String BROKER_URL = "tcp://localhost:61616";
@@ -35,7 +43,7 @@ public class Client {
 	// Max time between two requests submit
 	private static final int MAX_SLEEP = 7000;
 
-	// Max time for receiving a coordinator vote
+	// Max time waiting for receiving a vote
 	private static final int MAX_RECEIVE = 5000;
 
 	// Time for simulating a read operation
@@ -44,7 +52,7 @@ public class Client {
 	// Time for simulating a write operation
 	private static final int WRITE_TIME = 5000;
 
-	// List of votes (Coordinators which I've to send a RELEASE when I'm done)
+	// List of votes (Coordinators to which I need to send a RELEASE when I'm done)
 	private List<TextMessage> votes = new ArrayList<>();
 
 	// Boolean that tells if the previous client's request was successfully handled
@@ -53,7 +61,9 @@ public class Client {
 	// Otherwise, we must continue submitting the same type of request
 	private boolean previousRequestHandled = true;
 
+	// Quorums are read from a configuration file
 	private String properties = "config.properties";
+
 	private int readQuorum;
 	private int writeQuorum;
 
@@ -67,11 +77,16 @@ public class Client {
 
 	int msgID = 0;
 
+	/**
+	* Class constructor
+	* @param id Client's id
+	*/
 	public Client(int id) {
 		this.id = id;
 
 		System.out.println("Client " + this.id + " running");
 
+		// We read quorums from a configuration file
 		try {
 			readQuorum = Integer.parseInt(Broker.readConfig(properties, "readQuorum"));
 			writeQuorum = Integer.parseInt(Broker.readConfig(properties, "writeQuorum"));
@@ -83,6 +98,9 @@ public class Client {
 		}
 	}
 
+	/**
+	 * Method that starts the client's execution
+	 */
 	public void start() throws InterruptedException {
 		// Random number, useful to decide when to submit a request, and of which type
 		// the request will be
@@ -96,7 +114,7 @@ public class Client {
 			this.connection = (ActiveMQConnection) cf.createConnection();
 			connection.start();
 
-			// Client publish its request, waiting for subscribers (Coordinators) to handle
+			// Client publishes its request, waiting for subscribers (Coordinators) to handle
 			// this request
 			session = connection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
 			topic = session.createTopic(TOPIC_NAME);
@@ -131,10 +149,8 @@ public class Client {
 				publisher.publish(request);
 
 				// Now, we wait for the votes
-				// If the request was a read and we reached the read quorum, we sleep for
-				// READ_TIME ms
-				// If the request was a write and we reached the write quorum, we sleep for
-				// WRITE_TIME ms
+				// If the request was a read and we reached the read quorum, we sleep for READ_TIME ms
+				// If the request was a write and we reached the write quorum, we sleep for WRITE_TIME ms
 				Message receivedMessage = null;
 				while (true) {
 					receivedMessage = receiver.receive(MAX_RECEIVE);
@@ -157,8 +173,8 @@ public class Client {
 						System.out.println("\t\t" + (votes.size() - readQuorum) + " exceeding voters");
 						List<TextMessage> toBeReleased = votes.subList(0, votes.size() - readQuorum);
 						release(toBeReleased);
-						votes.subList(0, votes.size() - readQuorum).clear();
-						// for(int i = 0; i < votes.size(); ++i) votes.remove(i);
+						// votes.subList(0, votes.size() - readQuorum).clear();
+						// toBeReleased.clear();
 					}
 
 					read();
@@ -216,23 +232,6 @@ public class Client {
 		Thread.sleep(WRITE_TIME);
 	}
 
-	// private void releaseUnnecessaryVoters() throws JMSException {
-	// 	int votersToRelease = votes.size() - readQuorum;
-	// 	for(int i=0; i<votersToRelease; i++){
-	// 		MessageProducer producer = qsession.createProducer(null);
-	// 		ObjectMessage releaseMsg = qsession.createObjectMessage(new Request(this.id, Request.Type.RELEASE, null));
-
-	// 		String correlationID = Integer.toString(this.id);
-
-	// 		releaseMsg.setJMSCorrelationID(correlationID);
-
-	// 		System.out.println("*Sending release (correlation id=" + correlationID +")");
-	// 		producer.send(votes.get(i).getJMSReplyTo(), releaseMsg);
-
-	// 		votes.remove(i);
-	// 	}
-	// }
-
 	/**
 	 * Release all the voters contained in the list votes
 	 * @param votes The list of votes sent by voters to be released
@@ -254,11 +253,21 @@ public class Client {
 
 			// votes.remove(i);
 		}
+
+		votes.clear();
 	}
 
+	/**
+	 * Main method
+	 * @param args Vector of arguments
+	 * 						 In particular: 
+	 * 						 <CLIENT_ID>: a positive integer representing this Client's ID\n"
+	 * @throws InterruptedException
+	 */
 	public static void main(final String[] args) throws InterruptedException {
 		if (args.length != 1) {
-			System.out.print("Usage: java Client <CLIENT_ID>");
+			System.out.print("Usage: java -classpath bin:lib/activemq-all-5.16.1.jar it.unipr.ds.A3.Client <CLIENT_ID> \n\t"
+					+ "where:\n" + "\t<CLIENT_ID>: a positive integer representing this Client's ID\n");
 			System.exit(1);
 		}
 

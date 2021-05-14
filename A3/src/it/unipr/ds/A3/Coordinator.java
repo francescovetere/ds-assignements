@@ -3,17 +3,16 @@ package it.unipr.ds.A3;
 import javax.jms.Destination;
 import javax.jms.JMSException;
 import javax.jms.Message;
+import javax.jms.MessageConsumer;
 import javax.jms.MessageProducer;
 import javax.jms.ObjectMessage;
 import javax.jms.Queue;
-import javax.jms.QueueReceiver;
 import javax.jms.QueueSession;
 import javax.jms.Session;
 import javax.jms.TextMessage;
 import javax.jms.Topic;
 import javax.jms.TopicSession;
 import javax.jms.TopicSubscriber;
-import javax.jms.MessageConsumer;
 
 import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
@@ -21,7 +20,11 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 import it.unipr.ds.A3.Request.Type;
 
 /**
- * Class that implements a coordinator.
+ * Class that implements a coordinator
+ * 
+ * A coordinator subscribes to the topic, waiting for client requests
+ * When a client request arrives, the coordinator votes for it and we waits (synchronously) for a release
+ * Then, the coordinator is ready to process new requests
  **/
 public class Coordinator {
 	private static final String BROKER_URL = "tcp://localhost:61616";
@@ -38,10 +41,17 @@ public class Coordinator {
 
 	int msgID = 0;
 
+	/**
+	 * Class constructor
+	 * @param id Coordinator's id
+	 */
 	public Coordinator(int id) {
 		this.id = id;
 	}
 
+	/**
+	 * Method that starts the coordinator's execution
+	 */
 	public void start() {
 		System.out.println("Coordinator " + this.id + " running");
 
@@ -49,13 +59,12 @@ public class Coordinator {
 			ActiveMQConnectionFactory cf = new ActiveMQConnectionFactory(Coordinator.BROKER_URL);
 
 			cf.setTrustAllPackages(true);
+			// or, to be more strict: this.connection.setTrustedPackages(Arrays.asList("it.unipr.ds.A3"));
 
 			this.connection = (ActiveMQConnection) cf.createConnection();
 
 			// We want to receive an ObjectMessage, so we explicitly declare that we trust
 			// our package
-			// this.connection.setTrustedPackages(Arrays.asList("it.unipr.ds.A3"));
-
 			connection.start();
 
 			// Coordinators subscribe to Client's request, and then handle them (vote the
@@ -73,7 +82,8 @@ public class Coordinator {
 					ObjectMessage objMsg = (ObjectMessage) msg;
 					Request req = (Request) objMsg.getObject();
 
-					System.out.println("\tReceived " + req.getType() + " request from client " + req.getSenderID() + " (correlation id: " + msg.getJMSCorrelationID() + ")");
+					System.out.println("\tReceived " + req.getType() + " request from client " + req.getSenderID()
+							+ " (correlation id: " + msg.getJMSCorrelationID() + ")");
 
 					// If I receive a READ or WRITE request and I can handle it, I reply with a vote
 					if (req.getType() == Type.READ || req.getType() == Type.WRITE) {
@@ -90,7 +100,7 @@ public class Coordinator {
 
 						String correlationID = "<" + this.id + ":" + this.msgID + ">";
 						++msgID;
-						
+
 						vote.setJMSCorrelationID(correlationID);
 						vote.setText("I vote for you!");
 
@@ -121,9 +131,17 @@ public class Coordinator {
 		}
 	}
 
+	/**
+	 * Main method
+	 * @param args Vector of arguments
+	 * 						 In particular: 
+	 * 						 <COORDINATOR_ID>: a positive integer representing this Coordinator's ID\n"
+	 */
 	public static void main(final String[] args) {
 		if (args.length != 1) {
-			System.out.print("Usage: java Coordinator <COORDINATOR_ID>");
+			System.out.print(
+					"Usage: java -classpath bin:lib/activemq-all-5.16.1.jar it.unipr.ds.A3.Coordinator <COORDINATOR_ID> \n\t"
+							+ "where:\n" + "\t<COORDINATOR_ID>: a positive integer representing this Coordinator's ID\n");
 			System.exit(1);
 		}
 
